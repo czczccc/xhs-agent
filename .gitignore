@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+outputs/
+logs/
+evals/results/
+*.egg-info/
+.pytest_cache/
+
+# 抓取的小红书笔记：他人发布的内容，不公开（格式见 README）
+data/xiaohongshu_notes_*.json
+data/canyin_*.json
+# 本地开发配置
+.claude/

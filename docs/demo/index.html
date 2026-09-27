@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F6F7">
+<title>店铺笔记助手 · 演示</title>
+<meta name="description" content="餐饮店的小红书笔记助手：说一句今天想发什么，得到能直接发的图文">
+<style>
+:root {
+  --red: #FF2442; --red-soft: #FFF0F2; --bg: #F6F6F7; --card: #FFFFFF; --text: #1C1C1E; --sub: #6E6E73;
+  --faint: #AEAEB2; --line: #EBEBED; --ok: #1FA15B; --ok-soft: #EAF8F0; --link: #2F6BD8;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04); --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --red-soft: #3A1A20; --bg: #0F0F10; --card: #1C1C1E; --text: #F2F2F7; --sub: #A1A1A6; --faint: #636366;
+    --line: #2C2C2E; --ok-soft: #12301F; --link: #6EA2FF; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --red-soft: #3A1A20; --bg: #0F0F10; --card: #1C1C1E; --text: #F2F2F7; --sub: #A1A1A6; --faint: #636366;
+  --line: #2C2C2E; --ok-soft: #12301F; --link: #6EA2FF; --shadow: none;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; }
+button { font: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+
+.app { max-width: 480px; margin: 0 auto; min-height: 100dvh; position: relative; }
+.screen { min-height: 100dvh; display: flex; flex-direction: column; }
+.top { padding: calc(18px + env(safe-area-inset-top)) 20px 8px; }
+.steps { display: flex; gap: 6px; margin-bottom: 14px; }
+.steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.steps i.on { background: var(--red); }
+.top h1 { font-size: 22px; margin: 0; font-weight: 700; }
+.top p { margin: 6px 0 0; color: var(--sub); font-size: 14px; line-height: 1.5; }
+.back { background: none; border: 0; color: var(--sub); font-size: 14px; padding: 0 0 10px; }
+.body { flex: 1; padding: 8px 16px calc(130px + env(safe-area-inset-bottom)); }
+
+.card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.field { margin-bottom: 14px; }
+.field:last-child { margin-bottom: 0; }
+.field > label, .lbl { display: block; font-size: 13px; color: var(--sub); margin-bottom: 6px; }
+.field label em, .lbl em { font-style: normal; color: var(--red); margin-left: 2px; }
+.input { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 12px; font: inherit; font-size: 16px; color: var(--text); outline: none; }
+.input:focus { border-color: var(--red); }
+textarea.input { min-height: 76px; line-height: 1.5; resize: vertical; }
+.input::placeholder { color: var(--faint); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { padding: 7px 12px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); font-size: 14px; color: var(--text); }
+.chip.on { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+.chip .x { margin-left: 4px; opacity: .6; }
+.chip-add { display: flex; gap: 8px; margin-top: 8px; }
+.chip-add .input { padding: 8px 12px; font-size: 15px; }
+.chip-add button { flex: none; border: 1px dashed var(--line); background: var(--card); color: var(--sub); border-radius: 10px; padding: 0 14px; }
+.err { color: var(--red); font-size: 13px; margin-top: 6px; }
+
+.shopbar { display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; box-shadow: var(--shadow); gap: 8px; }
+.shopbar b { font-size: 15px; }
+.shopbar span { color: var(--sub); font-size: 13px; }
+.shopbar button { background: none; border: 0; color: var(--red); font-size: 13px; flex: none; }
+.sec { font-size: 15px; font-weight: 600; margin: 4px 2px 10px; }
+.types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.type { background: var(--card); border: 1.5px solid transparent; border-radius: 12px; padding: 12px 6px; text-align: center; font-size: 14px; box-shadow: var(--shadow); color: var(--text); }
+.type .e { font-size: 22px; display: block; margin-bottom: 4px; }
+.type.on { border-color: var(--red); background: var(--red-soft); color: var(--red); font-weight: 600; }
+.photos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ph { aspect-ratio: 1; border-radius: 10px; background: var(--bg) center / cover no-repeat; position: relative; border: 0; padding: 0; }
+.ph .n { position: absolute; left: 4px; top: 4px; background: rgba(0,0,0,.55); color: #fff; font-size: 10px; padding: 1px 5px; border-radius: 6px; }
+.ph .rm { position: absolute; right: -6px; top: -6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; font-size: 13px; line-height: 22px; text-align: center; border: 0; }
+.ph.add { border: 1.5px dashed var(--line); display: grid; place-items: center; color: var(--faint); font-size: 26px; }
+.hint { font-size: 12px; color: var(--faint); margin-top: 8px; line-height: 1.5; }
+details.card summary { color: var(--sub); font-size: 14px; list-style: none; display: flex; justify-content: space-between; cursor: pointer; }
+details.card summary::-webkit-details-marker { display: none; }
+details.card[open] summary { margin-bottom: 12px; }
+
+.q { font-size: 16px; font-weight: 600; line-height: 1.5; margin-bottom: 10px; }
+.q small { display: block; color: var(--faint); font-weight: 400; font-size: 12px; margin-bottom: 4px; }
+.mic { display: flex; gap: 8px; align-items: center; background: var(--red-soft); color: var(--red); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; line-height: 1.4; }
+
+.bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 75%, transparent); }
+.bar-in { max-width: 448px; margin: 0 auto; }
+.btn { display: block; width: 100%; min-height: 50px; border: 0; border-radius: 25px; background: var(--red); color: #fff; font-size: 17px; font-weight: 600; }
+.btn:disabled { opacity: .5; }
+.btn.ghost { background: transparent; color: var(--sub); font-weight: 400; font-size: 15px; min-height: 40px; margin-top: 4px; }
+.btn.line { background: var(--card); color: var(--text); border: 1px solid var(--line); font-weight: 500; font-size: 15px; min-height: 44px; border-radius: 22px; }
+
+.loading { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 36px 80px; }
+.spinner { width: 54px; height: 54px; border-radius: 50%; border: 4px solid var(--red-soft); border-top-color: var(--red); margin: 0 auto 24px; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.loading h2 { text-align: center; font-size: 19px; margin: 0 0 6px; }
+.loading > p { text-align: center; color: var(--sub); margin: 0 0 28px; font-size: 14px; min-height: 20px; }
+.stage { display: flex; align-items: center; gap: 12px; padding: 9px 0; font-size: 15px; color: var(--faint); }
+.stage .dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 12px; flex: none; }
+.stage.done { color: var(--text); }
+.stage.done .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.stage.now { color: var(--text); font-weight: 600; }
+.stage.now .dot { border-color: var(--red); }
+
+.check { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--ok); background: var(--ok-soft); padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; }
+.check.warn { color: var(--red); background: var(--red-soft); }
+.cover { aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; background: var(--card); position: relative; }
+.cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.cover.loading-img::after { content: "封面生成中…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--sub); font-size: 14px; background: var(--card); }
+.ph .st { position: absolute; inset: 0; border-radius: 10px; display: grid; place-items: center; background: rgba(0,0,0,.45); color: #fff; font-size: 12px; }
+.ph .st.err { background: rgba(255,36,66,.75); }
+.gallery { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 30; overflow-y: auto; padding: calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+.gallery-in { max-width: 480px; margin: 0 auto; }
+.gallery .g-top { display: flex; justify-content: space-between; align-items: center; color: #fff; margin-bottom: 12px; }
+.gallery .g-top b { font-size: 16px; }
+.gallery .g-top button { background: rgba(255,255,255,.15); color: #fff; border: 0; border-radius: 999px; padding: 6px 14px; }
+.gallery p { color: rgba(255,255,255,.7); font-size: 13px; margin: 0 0 14px; }
+.gallery img { width: 100%; display: block; border-radius: 10px; margin-bottom: 8px; -webkit-touch-callout: default; }
+.gallery .dl { display: block; color: #fff; font-size: 13px; text-align: right; margin: -2px 0 16px; opacity: .8; }
+.thumbs { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+.thumbs .ph { width: 52px; flex: none; }
+.acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.res-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.res-h span { font-size: 13px; color: var(--sub); }
+.copy { font-size: 13px; color: var(--red); border: 1px solid var(--red); border-radius: 999px; padding: 4px 14px; background: transparent; min-height: 30px; }
+.copy.done { color: var(--ok); border-color: var(--ok); }
+.title { font-size: 18px; font-weight: 700; line-height: 1.4; }
+.text { font-size: 15px; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+.text.clamp { max-height: 220px; overflow: hidden; position: relative; }
+.text.clamp::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(transparent, var(--card)); }
+.fb h3 { font-size: 15px; margin: 0 0 4px; }
+.fb > p { font-size: 13px; color: var(--sub); margin: 0 0 12px; }
+.fbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fbs button { border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 10px 4px; font-size: 13px; color: var(--text); }
+.fbs button .e { font-size: 20px; display: block; margin-bottom: 2px; }
+.fbs button.on { border-color: var(--red); background: var(--red-soft); color: var(--red); font-weight: 600; }
+.fb .thanks { color: var(--ok); font-size: 14px; margin-top: 12px; }
+.more { display: block; width: 100%; background: none; border: 0; color: var(--sub); font-size: 13px; padding: 8px 0 0; }
+.tags { color: var(--link); font-size: 14px; line-height: 1.8; margin-top: 10px; overflow-wrap: anywhere; }
+.title, .q, .shopbar b { overflow-wrap: anywhere; }
+
+.sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 10; display: flex; align-items: flex-end; }
+.sheet { background: var(--card); width: 100%; max-width: 480px; margin: 0 auto; border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+.sheet h3 { margin: 0 0 4px; font-size: 17px; }
+.sheet p { margin: 0 0 12px; color: var(--sub); font-size: 13px; }
+.toast { position: fixed; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: rgba(0,0,0,.8); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 20; max-width: 80vw; text-align: center; }
+.empty { text-align: center; padding: 60px 24px; color: var(--sub); line-height: 1.6; }
+.empty .e { font-size: 44px; display: block; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="demo-pre.js"></script>
+<script>
+// ======================= 状态 =======================
+const TYPES = [['上新', '🆕'], ['活动', '🎉'], ['日常', '☀️'], ['老板故事', '👩‍🍳'], ['节日', '🏮'], ['店铺介绍', '🏠']];
+const TONES = ['亲切像邻居', '热闹爽快', '安静文艺', '朴实实在', '精致克制', '青春元气'];
+const STAGES = [['retrieve', '看看同行怎么写'], ['plan', '列提纲'], ['write', '写正文'], ['review', '检查违规词和价格'], ['cover', '做封面']];
+const S = {
+  screen: 'onboard', shop: null,
+  compose: { type: '上新', topic: '', extra: '', photos: [] },  // photos: [{url(本地预览), id, status: up|ok|err, msg}]
+  coverStyle: 'big',
+  questions: [], answers: [], run: null, stage: {}, stageNote: '', expanded: false,
+};
+const store = {  // 本机只记试用码；店铺档案存在服务端
+  get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (_) {} },
+};
+class ApiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
+// 所有请求都带试用码；码不对（401）就回到输码页
+async function api(url, opts = {}) {
+  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), 'X-Shop-Code': S.code || '' } });
+  if (r.ok) return r;
+  const detail = (await r.json().catch(() => ({}))).detail || `请求失败（${r.status}）`;
+  if (r.status === 401) { store.del('xhs_code'); S.code = null; S.codeErr = detail; go('code'); }
+  throw new ApiError(r.status, detail);
+}
+const jsonOpts = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+// ======================= 工具 =======================
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const steps = n => `<div class="steps">${[1, 2, 3, 4].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>`;
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+function go(screen) { S.screen = screen; render(); window.scrollTo(0, 0); }
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
+  const ta = document.createElement('textarea');  // 旧版微信内置浏览器等不支持 clipboard API
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta);
+  ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {} ta.remove(); return ok;
+}
+async function postJSON(url, body) { return (await api(url, jsonOpts(body))).json(); }
+// 读 SSE：每完成一个节点回调一次，最后返回运行结果
+async function stream(url, body, onNode) {
+  const r = await api(url, jsonOpts(body));
+  const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '', done = null;
+  for (;;) {
+    const { value, done: end } = await reader.read();
+    if (end) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 2);
+      if (!line.startsWith('data: ')) continue;
+      const ev = JSON.parse(line.slice(6));
+      if (ev.type === 'node') onNode(ev.node);
+      else if (ev.type === 'done') done = ev.run;
+      else if (ev.type === 'error') throw new Error(ev.message);
+    }
+  }
+  if (!done) throw new Error('连接中断了');
+  return done;
+}
+
+// ======================= 页面 =======================
+function render() {
+  const app = $('#app');
+  app.innerHTML = ({ code: vCode, onboard: vOnboard, compose: vCompose, questions: vQuestions, loading: vLoading, result: vResult, error: vError })[S.screen]();
+  (({ code: bindCode, onboard: bindOnboard, compose: bindCompose, questions: bindQuestions, result: bindResult })[S.screen] || (() => {}))();
+}
+
+// ---------- ① 建档 ----------
+function vOnboard() {
+  // 编辑中的草稿；S.shop 只在点「保存」时更新，所以「是否首次建档」看 S.shop 即可
+  const s = S._draftShop || (S._draftShop = JSON.parse(JSON.stringify(S.shop || { signature: [], highlights: [], tone: TONES[0] })));
+  const chipList = (key, ph) => `
+    <div class="chips" data-list="${key}">${(s[key] || []).map((x, i) => `<button class="chip on" data-rm="${key}" data-i="${i}">${esc(x)}<span class="x">×</span></button>`).join('')}</div>
+    <div class="chip-add"><input class="input" data-add="${key}" placeholder="${ph}" enterkeyhint="done"><button data-addbtn="${key}">添加</button></div>`;
+  return `<div class="screen">
+    <div class="top">${steps(1)}
+      ${S.shop ? '<button class="back" id="cancel">‹ 返回</button>' : ''}
+      <h1>${S.shop ? '修改店铺档案' : '先认识一下你的店 👋'}</h1>
+      <p>填一次就行，之后每次写笔记都会用到。价格、菜名只会用你填的，不会乱编。</p></div>
+    <div class="body">
+      <div class="card">
+        <div class="field"><label for="f-name">店名<em>*</em></label><input class="input" id="f-name" value="${esc(s.name)}" placeholder="例如：巷口小馆"></div>
+        <div class="row2">
+          <div class="field"><label for="f-type">品类<em>*</em></label><input class="input" id="f-type" value="${esc(s.shop_type)}" placeholder="家常菜 / 咖啡"></div>
+          <div class="field"><label for="f-price">人均（元）</label><input class="input" id="f-price" type="number" inputmode="numeric" min="0" value="${esc(s.avg_price ?? '')}"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="f-city">城市</label><input class="input" id="f-city" value="${esc(s.city)}" placeholder="杭州"></div>
+          <div class="field"><label for="f-area">位置</label><input class="input" id="f-area" value="${esc(s.area)}" placeholder="西湖区文三路"></div>
+        </div>
+        <div class="field"><label for="f-hours">营业时间</label><input class="input" id="f-hours" value="${esc(s.hours)}" placeholder="11:00-21:30"></div>
+      </div>
+      <div class="card">
+        <div class="field"><span class="lbl">招牌菜 / 主推</span>${chipList('signature', '输入菜名')}</div>
+        <div class="field"><span class="lbl">你家的特点</span>${chipList('highlights', '例如：现点现炒')}</div>
+        <div class="field"><span class="lbl">说话风格</span>
+          <div class="chips">${TONES.map(t => `<button class="chip ${s.tone === t ? 'on' : ''}" data-tone="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>
+      </div>
+      <div class="err" id="err"></div>
+    </div>
+    <div class="bar"><div class="bar-in"><button class="btn" id="save">${S.shop ? '保存' : '保存，开始写笔记'}</button></div></div>
+  </div>`;
+}
+function bindOnboard() {
+  const draft = S._draftShop;
+  const keep = () => {
+    Object.assign(draft, {
+      name: $('#f-name').value.trim(), shop_type: $('#f-type').value.trim(), city: $('#f-city').value.trim(),
+      area: $('#f-area').value.trim(), hours: $('#f-hours').value.trim(),
+      avg_price: $('#f-price').value ? Number($('#f-price').value) : null,
+    });
+  };
+  const rerender = () => { keep(); render(); };
+  const add = key => {
+    const inp = document.querySelector(`[data-add="${key}"]`);
+    inp.value.split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean).forEach(x => { if (!draft[key].includes(x)) draft[key].push(x); });
+    rerender(); document.querySelector(`[data-add="${key}"]`).focus();
+  };
+  document.querySelectorAll('[data-addbtn]').forEach(b => b.onclick = () => add(b.dataset.addbtn));
+  document.querySelectorAll('[data-add]').forEach(i => i.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(i.dataset.add); } });
+  document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { draft[b.dataset.rm].splice(+b.dataset.i, 1); rerender(); });
+  document.querySelectorAll('[data-tone]').forEach(b => b.onclick = () => { draft.tone = b.dataset.tone; rerender(); });
+  if ($('#cancel')) $('#cancel').onclick = () => { S._draftShop = null; go('compose'); };
+  $('#save').onclick = () => {
+    keep();
+    document.querySelectorAll('[data-add]').forEach(i => { if (i.value.trim()) { draft[i.dataset.add].push(...i.value.split(/[,，、\s]+/).filter(Boolean)); } });
+    if (!draft.name || !draft.shop_type) { $('#err').textContent = '店名和品类是必填的'; return; }
+    const btn = $('#save'); btn.disabled = true; btn.textContent = '保存中…';
+    api('/api/shop', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })
+      .then(r => r.json()).then(info => { S.shop = info.profile; S.quota = info; S._draftShop = null; go('compose'); })
+      .catch(e => { if (e.status !== 401) { $('#err').textContent = '没保存上：' + e.message; btn.disabled = false; btn.textContent = '保存'; } });
+  };
+}
+
+// ---------- ② 今天发什么 ----------
+function vCompose() {
+  const c = S.compose, s = S.shop;
+  const where = [s.shop_type, s.area || s.city].filter(Boolean).join(' · ');
+  return `<div class="screen">
+    <div class="top">${steps(2)}<h1>今天想发点什么？</h1></div>
+    <div class="body">
+      <div class="shopbar"><div><b>${esc(s.name)}</b> <span>· ${esc(where)}</span>${S.quota ? `<br><span>今天还能写 ${Math.max(0, S.quota.daily_limit - S.quota.used_today)} 篇</span>` : ''}</div><button id="edit-shop">改档案</button></div>
+      <div class="sec">内容类型</div>
+      <div class="types">${TYPES.map(([t, e]) => `<button class="type ${c.type === t ? 'on' : ''}" data-type="${t}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
+      <div class="card">
+        <div class="field"><label for="topic">一句话说说<em>*</em></label>
+          <textarea class="input" id="topic" placeholder="${esc(topicHint(c.type))}">${esc(c.topic)}</textarea></div>
+        <div class="field"><span class="lbl">照片（第一张做封面）</span>
+          <div class="photos" id="photos">${photosInner()}</div>
+          <input type="file" id="pick" accept="image/*" multiple hidden>
+          <div class="hint">建议 3-6 张：成品特写、制作过程、店里环境。</div></div>
+      </div>
+      <details class="card" ${c.extra ? 'open' : ''}><summary><span>补充信息：价格、活动时间、限量…</span><span>›</span></summary>
+        <textarea class="input" id="extra" placeholder="例如：每周三全天，堂食有效。笔记里的价格和优惠只会用这里写的。">${esc(c.extra)}</textarea></details>
+      <div class="err" id="err"></div>
+    </div>
+    <div class="bar"><div class="bar-in"><button class="btn" id="next">下一步</button></div></div>
+  </div>`;
+}
+function photosInner() {
+  const c = S.compose;
+  return c.photos.map((p, i) => `<div class="ph" style="background-image:url('${p.url}')">${i === 0 ? '<span class="n">封面</span>' : ''}
+      ${p.status === 'up' ? '<span class="st">上传中…</span>' : p.status === 'err' ? `<span class="st err" title="${esc(p.msg)}">上传失败</span>` : ''}
+      <button class="rm" data-rmph="${i}" aria-label="删除">×</button></div>`).join('')
+    + (c.photos.length < 9 ? '<label class="ph add" for="pick" role="button" aria-label="添加照片">＋</label>' : '');
+}
+// 只重画照片格子，不打断正在输入的文字（整屏重绘会让手机键盘收起）
+function refreshPhotos() {
+  const box = $('#photos');
+  if (!box) return;
+  box.innerHTML = photosInner();
+  box.querySelectorAll('[data-rmph]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.rmph; URL.revokeObjectURL(S.compose.photos[i].url); S.compose.photos.splice(i, 1); refreshPhotos();
+  });
+}
+function topicHint(t) {
+  return { 上新: '例如：秋天上了新菜，板栗烧鸡', 活动: '例如：周三酸菜鱼半价', 日常: '例如：下雨天店里反而坐满了',
+    老板故事: '例如：红烧肉是跟外婆学的', 节日: '例如：国庆假期正常营业', 店铺介绍: '例如：第一次来必点的三样' }[t];
+}
+function bindCompose() {
+  const c = S.compose, keep = () => { c.topic = $('#topic').value; c.extra = $('#extra').value; };
+  $('#edit-shop').onclick = () => { keep(); S._draftShop = null; go('onboard'); };
+  document.querySelectorAll('[data-type]').forEach(b => b.onclick = () => { keep(); c.type = b.dataset.type; render(); });
+  $('#pick').onchange = e => {
+    keep();
+    const added = [...e.target.files].slice(0, 9 - c.photos.length).map(f => ({ url: URL.createObjectURL(f), status: 'up', file: f }));
+    c.photos.push(...added);
+    e.target.value = '';  // 允许再次选同一张
+    refreshPhotos();
+    added.forEach(p => uploadPhoto(p).then(() => { if (S.screen === 'compose') refreshPhotos(); }));
+  };
+  refreshPhotos();
+  $('#next').onclick = async () => {
+    keep();
+    if (!c.topic.trim()) { $('#err').textContent = '先说一句今天想发什么吧'; $('#topic').focus(); return; }
+    if (c.photos.some(p => p.status === 'up')) { toast('照片还在上传，稍等几秒'); return; }
+    if (c.photos.some(p => p.status === 'err')) { $('#err').textContent = '有照片没传上去，点 × 删掉它再继续'; return; }
+    const btn = $('#next'); btn.disabled = true; btn.textContent = '想想要问你什么…';
+    S.questions = [];
+    try { S.questions = (await postJSON('/api/questions', request())).questions || []; }
+    catch (e) { if (e.status === 401) return; }  // 追问失败就直接生成；码失效已跳到输码页
+    S.answers = S.questions.map(() => '');
+    if (S.questions.length) go('questions'); else generate();
+  };
+}
+// 手机端先压缩（长边 2000px、JPEG），再上传；解码失败就原样上传交给服务端判断
+async function compress(file) {
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.86));
+    return blob || file;
+  } catch (_) { return file; }
+}
+async function uploadPhoto(p) {
+  try {
+    const fd = new FormData();
+    fd.append('file', await compress(p.file), 'photo.jpg');
+    const r = await api('/api/uploads', { method: 'POST', body: fd });
+    const j = await r.json();
+    Object.assign(p, { id: j.id, status: 'ok' });
+  } catch (e) { Object.assign(p, { status: 'err', msg: e.message }); }
+  delete p.file;
+}
+function request() {
+  const c = S.compose;
+  return {
+    topic: c.topic.trim(), extra: c.extra.trim(), content_type: c.type, style: '种草', shop: S.shop,
+    answers: S.questions.map((q, i) => ({ question: q, answer: (S.answers[i] || '').trim() })).filter(a => a.answer),
+    photos: c.photos.filter(p => p.status === 'ok').map(p => p.id), cover_style: S.coverStyle,
+  };
+}
+
+// ---------- ③ 回答问题 ----------
+function vQuestions() {
+  return `<div class="screen">
+    <div class="top">${steps(3)}<button class="back" id="back">‹ 返回</button>
+      <h1>动笔前想问你几句</h1><p>这些细节只有你知道，写进去会比模板真实得多。随便说一两句就行。</p></div>
+    <div class="body">
+      <div class="mic">🎙️ 懒得打字？点键盘上的话筒，直接说就行</div>
+      ${S.questions.map((q, i) => `<div class="card"><div class="q"><small>问题 ${i + 1} / ${S.questions.length}</small>${esc(q)}</div>
+        <textarea class="input" data-ans="${i}" placeholder="${i ? '不想说可以留空' : '说说你看到的、闻到的、想到的…'}">${esc(S.answers[i])}</textarea></div>`).join('')}
+    </div>
+    <div class="bar"><div class="bar-in"><button class="btn" id="gen">生成笔记</button><button class="btn ghost" id="skip">跳过，直接生成</button></div></div>
+  </div>`;
+}
+function bindQuestions() {
+  const keep = () => document.querySelectorAll('[data-ans]').forEach(t => S.answers[+t.dataset.ans] = t.value);
+  $('#back').onclick = () => { keep(); go('compose'); };
+  $('#gen').onclick = () => { keep(); generate(); };
+  $('#skip').onclick = () => { S.answers = S.questions.map(() => ''); generate(); };
+}
+
+// ---------- ④ 生成中 ----------
+function vLoading() {
+  const order = STAGES.map(([k]) => k), cur = order.find(k => !S.stage[k]);
+  return `<div class="screen"><div class="loading">
+    <div class="spinner"></div><h2>${S.revising ? '正在按你的意见改' : '正在写你的笔记'}</h2>
+    <p>${esc(S.stageNote || '大概还要十几秒，别走开～')}</p>
+    ${STAGES.map(([k, label]) => `<div class="stage ${S.stage[k] ? 'done' : k === cur ? 'now' : ''}"><span class="dot">${S.stage[k] ? '✓' : ''}</span>${label}</div>`).join('')}
+  </div></div>`;
+}
+function onNode(node) {
+  if (node === 'write' && S.stage.review) {  // 审核没过、带着问题重写
+    S.stage.write = false; S.stage.review = false; S.stageNote = '检查时发现一点问题，正在改写…';
+  }
+  if (node in S.stage || STAGES.some(([k]) => k === node)) S.stage[node] = true;
+  if (S.screen === 'loading') render();
+}
+async function generate() {
+  S.stage = {}; S.stageNote = ''; S.revising = false; S.expanded = false; S.fb = {}; S.errorStatus = null; go('loading');
+  try { S.run = await stream('/api/runs/stream', request(), onNode); go(S.run.status === 'error' ? 'error' : 'result'); }
+  catch (e) { if (e.status === 401) return; S.errorMsg = e.message; S.errorStatus = e.status; go('error'); }
+  finally { refreshQuota(); }
+}
+async function revise(feedback) {
+  // 重写只重新走「写正文 → 检查 → 封面」
+  S.stage = { retrieve: true, plan: true }; S.stageNote = ''; S.revising = true; S.expanded = false; S.fb = {}; go('loading');
+  const prev = S.run;
+  try { S.run = await stream(`/api/runs/${S.run.run_id}/decision/stream`, { decision: 'revise', feedback }, onNode); go(S.run.status === 'error' ? 'error' : 'result'); }
+  catch (e) {
+    if (e.status === 401) return;
+    if (e.status === 429) { S.run = prev; go('result'); toast(e.message); return; }  // 额度用完：回到原来那篇
+    S.errorMsg = e.message; S.errorStatus = e.status; go('error');
+  }
+  finally { refreshQuota(); }
+}
+
+// ---------- ⑤ 结果 ----------
+function vResult() {
+  const r = S.run, d = r.draft || {}, ok = r.review && r.review.passed;
+  const tags = (d.tags || []).map(t => '#' + t).join(' ');
+  const photos = r.photos || [];
+  const STYLE_NAMES = [['big', '大字'], ['bottom', '底部标题'], ['badge', '角标']];
+  return `<div class="screen">
+    <div class="top">${steps(4)}<h1>${ok ? '写好了 ✨' : '写好了，但还有点问题'}</h1></div>
+    <div class="body">
+      ${ok ? '<div class="check">✓ 已检查：没有违规词，价格和活动都来自你给的信息</div>'
+           : `<div class="check warn">⚠ 自动修改了几次还有问题，发之前请看一下：${esc((r.review?.issues || []).join('；'))}</div>`}
+      ${r.cover_url ? `<div class="cover loading-img" id="cover"><img src="${esc(coverUrl())}" alt="封面"></div>` : ''}
+      ${photos.length ? `<div class="thumbs">${photos.map(u => `<div class="ph" style="background-image:url('${esc(u)}')"></div>`).join('')}</div>
+        <div class="chips" style="margin-bottom:12px">${STYLE_NAMES.map(([k, n]) => `<button class="chip ${S.coverStyle === k ? 'on' : ''}" data-style="${k}">${n}</button>`).join('')}</div>` : ''}
+      <div class="acts"><button class="btn line" id="save-imgs">⬇ 保存图片</button><button class="btn line" id="rewrite">✎ 按意见重写</button></div>
+      <div class="card"><div class="res-h"><span>标题</span><button class="copy" data-copy="title">复制</button></div>
+        <div class="title">${esc(d.title)}</div></div>
+      <div class="card"><div class="res-h"><span>正文 + 标签</span><button class="copy" data-copy="body">复制</button></div>
+        <div class="text ${S.expanded ? '' : 'clamp'}" id="text">${esc(d.body)}</div>
+        ${S.expanded ? '' : '<button class="more" id="more">展开全文 ⌄</button>'}
+        <div class="tags">${esc(tags)}</div></div>
+      ${vFeedback()}
+      <button class="btn ghost" id="again">＋ 再写一篇</button>
+    </div>
+  </div>`;
+}
+const RATINGS = [['ready', '👍', '能直接发'], ['edit', '✍️', '改改能发'], ['bad', '👎', '不能用']];
+function vFeedback() {
+  const f = S.fb || {};
+  const hint = { ready: '有什么特别喜欢的地方吗？（可不填）', edit: '哪里需要改？说一句就行', bad: '哪里不行？你的意见对我们很重要' }[f.rating];
+  return `<div class="card fb" id="fb-card"><h3>这篇能用吗？</h3><p>你的反馈会让下一篇写得更好</p>
+    <div class="fbs">${RATINGS.map(([k, e, n]) => `<button class="${f.rating === k ? 'on' : ''}" data-rate="${k}"><span class="e">${e}</span>${n}</button>`).join('')}</div>
+    ${f.rating && !f.sent ? `<textarea class="input" id="fb-comment" style="margin-top:12px" placeholder="${hint}">${esc(f.comment || '')}</textarea>
+      <button class="btn" id="fb-send" style="margin-top:10px;min-height:44px;font-size:15px">补充这句</button>` : ''}
+    ${f.rating ? `<div class="thanks">✓ 已记下「${RATINGS.find(r => r[0] === f.rating)[2]}」${f.sent ? '，理由也收到了，谢谢！' : '，谢谢！'}想改可以直接再点上面的按钮</div>` : ''}</div>`;
+}
+// 行为信号：失败不影响使用，也不提示
+function track(kind, extra = {}) {
+  if (!S.run) return;
+  fetch(`/api/runs/${S.run.run_id}/events`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Shop-Code': S.code || '' },
+    body: JSON.stringify({ kind, ...extra }) }).catch(() => {});
+}
+function bindFeedback() {
+  document.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => {
+    // 点了就先记下评分（很多人不会再写理由）；写了理由再补一条带 comment 的，汇总时以最后一条为准
+    S.fb = { rating: b.dataset.rate, comment: '', sent: false }; track('rating', { rating: S.fb.rating });
+    redrawFeedback();
+  });
+  if ($('#fb-send')) $('#fb-send').onclick = async () => {
+    S.fb.comment = $('#fb-comment').value.trim();
+    const btn = $('#fb-send'); btn.disabled = true; btn.textContent = '提交中…';
+    try { await postJSON(`/api/runs/${S.run.run_id}/events`, { kind: 'rating', rating: S.fb.rating, comment: S.fb.comment }); S.fb.sent = true; }
+    catch (_) { toast('没提交上，网络好点再试一次'); }
+    redrawFeedback();
+  };
+}
+function redrawFeedback() {  // 只重画反馈卡片，页面不跳
+  $('#fb-card').outerHTML = vFeedback(); bindFeedback();
+}
+function coverUrl() { return `${S.run.cover_url}&style=${S.coverStyle}`; }
+function openGallery() {
+  const imgs = [[coverUrl(), '封面']].concat((S.run.photos || []).map((u, i) => [u, `照片 ${i + 1}`]));
+  const g = document.createElement('div'); g.className = 'gallery';
+  g.innerHTML = `<div class="gallery-in"><div class="g-top"><b>保存图片</b><button id="g-close">关闭</button></div>
+    <p>手机上：长按图片 →「保存图片」。按顺序发，第一张是封面。</p>
+    ${imgs.map(([u, n]) => `<img src="${esc(u)}" alt="${n}"><a class="dl" href="${esc(u)}" download="${n}.${n === '封面' ? 'png' : 'jpg'}">下载${n}</a>`).join('')}</div>`;
+  document.body.appendChild(g);
+  g.querySelector('#g-close').onclick = () => g.remove();
+  track('save_images');
+}
+function bindResult() {
+  const d = S.run.draft || {}, tags = (d.tags || []).map(t => '#' + t).join(' ');
+  const img = $('#cover img');
+  if (img) img.onload = () => $('#cover').classList.remove('loading-img');
+  document.querySelectorAll('[data-style]').forEach(b => b.onclick = () => { S.coverStyle = b.dataset.style; track('cover_style', { value: S.coverStyle }); render(); });
+  $('#save-imgs').onclick = openGallery;
+  bindFeedback();
+  if ($('#more')) $('#more').onclick = () => { S.expanded = true; render(); };
+  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
+    const text = b.dataset.copy === 'title' ? d.title : `${d.body}\n\n${tags}`;
+    track(b.dataset.copy === 'title' ? 'copy_title' : 'copy_body');
+    if (await copyText(text)) { b.textContent = '✓ 已复制'; b.classList.add('done'); toast(b.dataset.copy === 'title' ? '标题已复制，去小红书粘贴到标题栏' : '正文已复制，粘贴到正文栏'); }
+    else toast('复制失败，请长按文字手动复制');
+  });
+  $('#again').onclick = () => {
+    S.compose.photos.forEach(p => URL.revokeObjectURL(p.url));
+    S.compose = { type: S.compose.type, topic: '', extra: '', photos: [] }; S.questions = []; go('compose');
+  };
+  $('#rewrite').onclick = () => {
+    const bg = document.createElement('div'); bg.className = 'sheet-bg';
+    bg.innerHTML = `<div class="sheet"><h3>想怎么改？</h3><p>一句话就行，例如：标题再抓人一点 / 少用点 emoji / 多写写环境</p>
+      <textarea class="input" id="fb" placeholder="说说你的意见"></textarea>
+      <div class="acts" style="margin:12px 0 0"><button class="btn line" id="fb-cancel">取消</button><button class="btn" id="fb-go" style="min-height:44px;font-size:15px">重写</button></div></div>`;
+    document.body.appendChild(bg); bg.querySelector('#fb').focus();
+    bg.onclick = e => { if (e.target === bg) bg.remove(); };
+    bg.querySelector('#fb-cancel').onclick = () => bg.remove();
+    bg.querySelector('#fb-go').onclick = () => {
+      const v = bg.querySelector('#fb').value.trim();
+      if (!v) { bg.querySelector('#fb').focus(); return; }
+      bg.remove(); revise(v);
+    };
+  };
+}
+
+// ---------- 出错 ----------
+function vError() {
+  const msg = S.run?.error || S.errorMsg || '';
+  if (S.errorStatus === 429) return `<div class="screen"><div class="empty"><span class="e">🌙</span>
+    <b>今天的次数用完了</b><br>${esc(msg)}<br>明天会自动恢复；着急的话，找给你试用码的人加次数。</div>
+    <div class="bar"><div class="bar-in"><button class="btn ghost" id="home">返回</button></div></div></div>`;
+  return `<div class="screen"><div class="empty"><span class="e">😵</span>
+    <b>这次没写成</b><br>可能是网络不稳或者服务有点忙，再试一次通常就好了。
+    <details style="margin-top:12px;font-size:12px;color:var(--faint)"><summary>技术细节</summary>${esc(msg)}</details></div>
+    <div class="bar"><div class="bar-in"><button class="btn" id="retry">再试一次</button><button class="btn ghost" id="home">返回修改</button></div></div>
+  </div>`;
+}
+document.addEventListener('click', e => {
+  if (e.target.id === 'retry') S.shop ? generate() : loadShop();  // 读档案失败时重试读档案
+  if (e.target.id === 'home') go(S.shop ? 'compose' : S.code ? 'onboard' : 'code');
+});
+
+// ---------- 输入试用码 ----------
+function vCode() {
+  return `<div class="screen">
+    <div class="top" style="padding-top:calc(64px + env(safe-area-inset-top))"><h1>店铺笔记助手</h1>
+      <p>说一句今天想发什么，帮你写好能直接发的小红书图文。</p></div>
+    <div class="body">
+      <div class="card"><div class="field"><label for="code">试用码</label>
+        <input class="input" id="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false"
+          placeholder="6 位字母和数字" style="font-size:22px;letter-spacing:4px;text-transform:uppercase"></div>
+        <div class="err" id="err">${esc(S.codeErr || '')}</div></div>
+      <div class="hint" style="padding:0 4px">还没有试用码？找给你发链接的人要一个。</div>
+    </div>
+    <div class="bar"><div class="bar-in"><button class="btn" id="enter">进入</button></div></div>
+  </div>`;
+}
+function bindCode() {
+  const inp = $('#code');
+  inp.focus();
+  const enter = async () => {
+    const code = inp.value.trim().toUpperCase();
+    if (code.length !== 6) { $('#err').textContent = '试用码是 6 位'; return; }
+    S.code = code; S.codeErr = '';
+    $('#enter').disabled = true; $('#enter').textContent = '进入中…';
+    if (await loadShop()) store.set('xhs_code', code);
+  };
+  $('#enter').onclick = enter;
+  inp.onkeydown = e => { if (e.key === 'Enter') enter(); };
+}
+// 拿服务端的档案和今日额度；码不对时 api() 会跳回输码页
+async function loadShop() {
+  try {
+    const info = await (await api('/api/shop')).json();
+    S.quota = info; S.shop = info.profile; S._draftShop = null;
+    go(S.shop ? 'compose' : 'onboard');
+    return true;
+  } catch (e) {
+    if (e.status !== 401) { S.errorMsg = e.message; go('error'); }
+    return false;
+  }
+}
+async function refreshQuota() {
+  try { S.quota = await (await api('/api/shop')).json(); } catch (_) {}
+}
+
+// ======================= 启动 =======================
+S.code = store.get('xhs_code');
+if (S.code) loadShop(); else go('code');
+</script>
+<script src="demo-post.js"></script>
+</body>
+</html>

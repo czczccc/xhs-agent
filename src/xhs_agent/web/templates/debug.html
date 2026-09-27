@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小红书图文生成 Agent</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 960px; margin: 32px auto; padding: 0 16px; color: #222; }
+  h1 { color: #ff2442; }
+  input, select, textarea, button { font: inherit; padding: 8px; }
+  input[name=topic] { width: 60%; }
+  button { background: #ff2442; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+  button.secondary { background: #666; }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 24px; margin-top: 24px; }
+  .card { border: 1px solid #eee; border-radius: 10px; padding: 16px; }
+  pre { white-space: pre-wrap; font-family: inherit; }
+  .cover { width: 320px; border-radius: 8px; }
+  .muted { color: #888; font-size: 13px; }
+  .bad { color: #c00; }
+  .shop { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .shop label { display: flex; flex-direction: column; font-size: 13px; color: #555; gap: 4px; }
+  .shop label.wide { grid-column: span 3; }
+  .shop input, .shop select { width: 100%; box-sizing: border-box; }
+  @media (max-width: 720px) { .shop { grid-template-columns: 1fr; } .shop label.wide { grid-column: auto; } }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } input[name=topic] { width: 100%; } }
+</style>
+</head>
+<body>
+<h1>小红书图文生成 Agent</h1>
+<form id="f">
+  <details id="shopBox" class="card" style="margin-bottom:12px">
+    <summary><b>店铺档案</b> <span class="muted">（填了店名就按店铺官方号来写；留空为通用模式。只保存在本浏览器）</span></summary>
+    <div class="shop">
+      <label>店名<input name="name" placeholder="巷口小馆"></label>
+      <label>品类<input name="shop_type" placeholder="家常菜 / 火锅 / 咖啡"></label>
+      <label>城市<input name="city" placeholder="杭州"></label>
+      <label>位置<input name="area" placeholder="西湖区文三路"></label>
+      <label>人均（元）<input name="avg_price" type="number" min="0"></label>
+      <label>营业时间<input name="hours" placeholder="11:00-21:30"></label>
+      <label class="wide">招牌（逗号分隔）<input name="signature" placeholder="酸菜鱼，小炒黄牛肉"></label>
+      <label class="wide">卖点（逗号分隔）<input name="highlights" placeholder="现点现炒，米饭免费续"></label>
+      <label>口吻<input name="tone" placeholder="亲切真诚"></label>
+      <label>内容类型<select name="content_type"><option>日常</option><option>上新</option><option>活动</option><option>老板故事</option><option>节日</option><option>店铺介绍</option></select></label>
+    </div>
+  </details>
+  <input name="topic" placeholder="选题 / 本次要发的内容，例如：周三酸菜鱼半价" required>
+  <select name="style"><option>干货</option><option>种草</option><option>日常分享</option><option>测评</option></select>
+  <button>生成</button>
+  <textarea name="extra" rows="2" style="width:100%;margin-top:8px" placeholder="补充信息（可选）：价格、活动时间、限量等。商家模式下，笔记里的价格和优惠只能来自店铺档案和这里"></textarea>
+</form>
+<div id="out"></div>
+<script>
+const out = document.getElementById('out');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let runId = null;
+// 用首页存下的试用码；通用模式调试请设 REQUIRE_SHOP_CODE=false
+const CODE = (() => { try { return JSON.parse(localStorage.getItem('xhs_code') || '""'); } catch (_) { return ''; } })();
+
+function render(r) {
+  runId = r.run_id;
+  const d = r.draft || {};
+  const issues = (r.review?.issues || []).map(i => `<li class="bad">${esc(i)}</li>`).join('');
+  const refs = r.references.map(x => `<li>${esc(x.title)} <span class="muted">(${x.score})</span></li>`).join('');
+  out.innerHTML = `
+  <div class="grid">
+    <div class="card">
+      <div class="muted">状态：${esc(r.status)} · 步骤 ${r.stats.steps} · 耗时 ${Math.round(r.stats.latency_ms)} ms · tokens ${r.stats.prompt_tokens}+${r.stats.completion_tokens}</div>
+      <h2>${esc(d.title)}</h2>
+      <pre>${esc(d.body)}</pre>
+      <p>${(d.tags || []).map(t => '#' + esc(t)).join(' ')}</p>
+      ${r.error ? `<p class="bad">生成失败：${esc(r.error)}</p>` : ''}
+      ${issues ? `<ul>${issues}</ul>` : ''}
+      ${r.status === 'pending_review' ? `
+        <textarea id="fb" rows="2" style="width:100%" placeholder="修改意见（可选）"></textarea><br>
+        <button onclick="decide('approve')">通过</button>
+        <button class="secondary" onclick="decide('revise')">按意见重写</button>
+        <button class="secondary" onclick="decide('reject')">驳回</button>` : ''}
+      <h3>参考笔记</h3><ul>${refs}</ul>
+    </div>
+    <div>${r.cover_url ? `<img class="cover" src="${r.cover_url}" alt="封面">` : ''}</div>
+  </div>`;
+}
+
+async function call(url, body) {
+  out.innerHTML = '<p class="muted">生成中…</p>';
+  const r = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json', 'X-Shop-Code': CODE}, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (!r.ok) { out.innerHTML = `<p class="bad">${esc(j.detail)}</p>`; return; }
+  render(j);
+}
+
+const SHOP_FIELDS = ['name', 'shop_type', 'city', 'area', 'avg_price', 'hours', 'signature', 'highlights', 'tone', 'content_type'];
+const form = document.getElementById('f');
+// 店铺档案只是本浏览器的便利记忆；读不到也不影响使用
+try {
+  const saved = JSON.parse(localStorage.getItem('shop') || 'null');
+  if (saved) { SHOP_FIELDS.forEach(k => { if (saved[k] != null) form.elements[k].value = saved[k]; }); document.getElementById('shopBox').open = !!saved.name; }
+} catch (_) {}
+
+// 素材追问：商家模式先问店主 2-3 个问题，回答（可跳过）随请求一起提交
+let pending = null;
+async function askFirst(body) {
+  out.innerHTML = '<p class="muted">正在想要问你的问题…</p>';
+  let qs = [];
+  try {
+    const r = await fetch('/api/questions', { method: 'POST', headers: {'Content-Type': 'application/json', 'X-Shop-Code': CODE}, body: JSON.stringify(body) });
+    if (r.ok) qs = (await r.json()).questions || [];
+  } catch (_) {}
+  if (!qs.length) return call('/api/runs', body);
+  pending = { body, qs };
+  out.innerHTML = `
+  <div class="card" style="margin-top:24px">
+    <h3 style="margin-top:0">动笔前想问你几句</h3>
+    <p class="muted">用你自己的话随便说一两句就行，越具体越好。这些细节只有你知道，写进笔记会比模板真实得多；不想答可以留空。</p>
+    ${qs.map((q, i) => `<label style="display:block;margin:12px 0 4px">${esc(q)}</label>
+      <textarea class="ans" data-i="${i}" rows="2" style="width:100%;box-sizing:border-box"></textarea>`).join('')}
+    <p><button onclick="submitAnswers()">用这些回答生成</button>
+       <button class="secondary" onclick="submitAnswers(true)">跳过，直接生成</button></p>
+  </div>`;
+  out.querySelector('textarea.ans')?.focus();
+}
+window.submitAnswers = skip => {
+  const { body, qs } = pending;
+  body.answers = skip ? [] : [...out.querySelectorAll('textarea.ans')]
+    .map(t => ({ question: qs[t.dataset.i], answer: t.value.trim() })).filter(a => a.answer);
+  call('/api/runs', body);
+};
+
+form.onsubmit = e => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  const body = { topic: fd.get('topic'), style: fd.get('style'), extra: fd.get('extra') || '' };
+  const raw = Object.fromEntries(SHOP_FIELDS.map(k => [k, (fd.get(k) || '').trim()]));
+  try { localStorage.setItem('shop', JSON.stringify(raw)); } catch (_) {}
+  if (raw.name) {
+    const list = s => s.split(/[,，、]/).map(x => x.trim()).filter(Boolean);
+    body.content_type = raw.content_type;
+    body.shop = {
+      name: raw.name, shop_type: raw.shop_type || '餐饮', city: raw.city, area: raw.area, hours: raw.hours,
+      avg_price: raw.avg_price ? Number(raw.avg_price) : null,
+      signature: list(raw.signature), highlights: list(raw.highlights), tone: raw.tone || '亲切真诚',
+    };
+    return askFirst(body);
+  }
+  call('/api/runs', body);
+};
+window.decide = d => call(`/api/runs/${runId}/decision`, { decision: d, feedback: document.getElementById('fb')?.value || '' });
+</script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>店铺笔记助手</title>
+<meta name="description" content="给餐饮店写小红书图文的 Agent：LangGraph 编排、防编造审核、素材追问、真实评测与试用。">
+<style>
+:root {
+  --red: #FF2442; --red-soft: #FFF0F2; --bg: #FAFAFA; --card: #FFFFFF; --text: #1C1C1E; --sub: #6E6E73; --faint: #AEAEB2;
+  --line: #EBEBED; --ok: #1FA15B; --code: #F2F2F4; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --red-soft: #3A1A20; --bg: #0F0F10; --card: #1C1C1E; --text: #F2F2F7; --sub: #A1A1A6; --faint: #636366; --line: #2C2C2E; --code: #2C2C2E; --shadow: none; }
+}
+:root[data-theme="dark"] { --red-soft: #3A1A20; --bg: #0F0F10; --card: #1C1C1E; --text: #F2F2F7; --sub: #A1A1A6; --faint: #636366; --line: #2C2C2E; --code: #2C2C2E; --shadow: none; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+a { color: var(--red); }
+.wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+header { padding: 64px 0 32px; }
+.eyebrow { color: var(--red); font-weight: 600; font-size: 14px; letter-spacing: .5px; }
+h1 { font-size: clamp(30px, 6vw, 44px); margin: 6px 0 12px; line-height: 1.2; }
+.lead { font-size: 18px; color: var(--sub); max-width: 680px; margin: 0; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+.btn { display: inline-block; padding: 12px 22px; border-radius: 999px; text-decoration: none; font-weight: 600; }
+.btn.main { background: var(--red); color: #fff; }
+.btn.ghost { border: 1px solid var(--line); color: var(--text); background: var(--card); }
+section { padding: 28px 0; }
+h2 { font-size: 22px; margin: 0 0 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+.card h3 { margin: 0 0 6px; font-size: 16px; }
+.card p { margin: 0; color: var(--sub); font-size: 14px; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: s; }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.step b { display: block; margin-bottom: 2px; }
+.step b::before { counter-increment: s; content: counter(s); display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; font-size: 12px; margin-right: 8px; }
+.step span { color: var(--sub); font-size: 14px; }
+.flow { overflow-x: auto; }
+.flow svg { min-width: 760px; width: 100%; height: auto; display: block; }
+.flow .n { fill: var(--card); stroke: var(--line); }
+.flow .n.hl { stroke: var(--red); }
+.flow text { fill: var(--text); font-size: 13px; font-family: inherit; }
+.flow .t2 { fill: var(--sub); font-size: 11px; }
+.flow .e { stroke: var(--faint); fill: none; stroke-width: 1.5; marker-end: url(#arr); }
+.flow .e.back { stroke-dasharray: 4 4; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--code); color: var(--sub); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-weight: 600; color: var(--sub); font-size: 13px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+tr.best td { background: var(--red-soft); }
+.table { overflow-x: auto; }
+.note { font-size: 13px; color: var(--sub); margin-top: 10px; }
+.find { border-left: 3px solid var(--red); padding: 2px 0 2px 14px; margin: 14px 0; }
+.find b { display: block; }
+.find span { color: var(--sub); font-size: 14px; }
+code { background: var(--code); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+footer { padding: 40px 0 60px; color: var(--faint); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">AI AGENT · 本地生活 · 小红书</div>
+    <h1>店铺笔记助手</h1>
+    <p class="lead">给餐饮店写小红书图文的 Agent。店主说一句今天想发什么、回答两三个问题，就能拿到能直接发的标题、正文、标签和照片封面——价格和优惠只会来自店主给的信息，不会乱编。</p>
+    <div class="cta">
+      <a class="btn main" href="demo/">体验演示（手机效果最佳）</a>
+      <a class="btn ghost" href="https://github.com/czczccc/xhs-agent">GitHub 仓库</a>
+      <a class="btn ghost" href="https://github.com/czczccc/xhs-agent/blob/main/evals/REPORT.md">评测报告</a>
+    </div>
+  </header>
+
+  <section>
+    <h2>店主怎么用</h2>
+    <div class="steps">
+      <div class="step"><b>建档</b><span>店名、招牌、人均、位置，填一次</span></div>
+      <div class="step"><b>说今天发什么</b><span>选类型（上新 / 活动…），写一句话，传照片</span></div>
+      <div class="step"><b>回答两三个问题</b><span>Agent 追问只有店主知道的细节，可语音、可跳过</span></div>
+      <div class="step"><b>拿结果</b><span>照片封面三种样式、分开复制标题正文、给反馈</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Agent 流程</h2>
+    <div class="card flow">
+      <svg viewBox="0 0 900 250" role="img" aria-label="LangGraph 流程：检索、规划、写作、审核、封面、人工确认，审核失败带问题重写">
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#AEAEB2"/></marker></defs>
+        <rect class="n" x="10" y="95" width="100" height="56" rx="10"/><text x="60" y="119" text-anchor="middle">素材追问</text><text class="t2" x="60" y="137" text-anchor="middle">问店主 2-3 句</text>
+        <rect class="n" x="140" y="95" width="100" height="56" rx="10"/><text x="190" y="119" text-anchor="middle">检索</text><text class="t2" x="190" y="137" text-anchor="middle">pgvector</text>
+        <rect class="n" x="270" y="95" width="100" height="56" rx="10"/><text x="320" y="119" text-anchor="middle">规划</text><text class="t2" x="320" y="137" text-anchor="middle">角度 / 标题 / 大纲</text>
+        <rect class="n" x="400" y="95" width="100" height="56" rx="10"/><text x="450" y="119" text-anchor="middle">写作</text><text class="t2" x="450" y="137" text-anchor="middle">店铺官方口吻</text>
+        <rect class="n hl" x="530" y="95" width="110" height="56" rx="10"/><text x="585" y="119" text-anchor="middle">审核</text><text class="t2" x="585" y="137" text-anchor="middle">广告法 + 防编造</text>
+        <rect class="n" x="670" y="95" width="90" height="56" rx="10"/><text x="715" y="119" text-anchor="middle">封面</text><text class="t2" x="715" y="137" text-anchor="middle">照片 + 大字 PNG</text>
+        <rect class="n hl" x="790" y="95" width="100" height="56" rx="10"/><text x="840" y="119" text-anchor="middle">人工确认</text><text class="t2" x="840" y="137" text-anchor="middle">interrupt</text>
+        <path class="e" d="M110,123 H138"/><path class="e" d="M240,123 H268"/><path class="e" d="M370,123 H398"/><path class="e" d="M500,123 H528"/><path class="e" d="M640,123 H668"/><path class="e" d="M760,123 H788"/>
+        <path class="e back" d="M585,95 C585,45 450,45 450,93"/><text class="t2" x="517" y="40" text-anchor="middle">不通过：带着具体问题重写</text>
+        <path class="e back" d="M840,151 C840,215 450,215 450,153"/><text class="t2" x="645" y="232" text-anchor="middle">店主提修改意见：按意见重写</text>
+      </svg>
+      <div class="chips"><span class="chip">LangGraph</span><span class="chip">Pydantic 结构化输出</span><span class="chip">FastAPI + SSE</span><span class="chip">Postgres + pgvector</span><span class="chip">PostgresSaver 断点续跑</span><span class="chip">Pillow 封面渲染</span><span class="chip">OpenAI 兼容接口（DeepSeek）</span><span class="chip">pytest 50+ 用例</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>值得一看的设计</h2>
+    <div class="grid">
+      <div class="card"><h3>防编造审核</h3><p>正文里带单位的数字（价格、折扣、份数、时间）和「半价 / 免费 / 买一送一」必须能在店铺档案、本次需求或店主回答里找到，否则打回并带着具体问题重写。24 个评测用例零编造。</p></div>
+      <div class="card"><h3>素材追问</h3><p>动笔前让模型问店主只有他知道的细节；回答既是素材，也算进「允许出现的事实」。提示词强制第一人称，避免「店主说……」的 AI 转述腔。</p></div>
+      <div class="card"><h3>真实进度（SSE）</h3><p>LangGraph 每完成一个节点推一条事件，前端逐项打勾；审核不通过会显示「正在改写」。流式模式也用来兼容只支持流式的模型中转。</p></div>
+      <div class="card"><h3>试用码体系</h3><p>一个 6 位码同时管访问、服务端店铺档案、每日额度（生成和重写计次、原子扣减）、反馈归属和店与店隔离。</p></div>
+      <div class="card"><h3>照片封面</h3><p>上传时摆正方向、压缩、去 EXIF 定位；1080×1440 PNG 三种样式，中文按行长平衡断行，避免孤字。</p></div>
+      <div class="card"><h3>可回放的演示站</h3><p>这个页面和演示都是静态的：演示用的是真实前端代码 + 一层回放，回放的全部是评测里真实生成的结果。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>评测：什么有用、什么没用</h2>
+    <p style="color:var(--sub);margin-top:0">24 个餐饮用例（8 家虚构店 × 3 个需求），LLM 裁判按严格分档打 1-5 分，每行只改一个变量。</p>
+    <div class="table"><table>
+      <tr><th>版本</th><th>改动</th><th class="num">吸引力</th><th class="num">相关性</th><th class="num">想去店里</th><th class="num">像店主</th></tr>
+      <tr><td>v1</td><td>商家模式基线</td><td class="num">3.00</td><td class="num">4.33</td><td class="num">3.04</td><td class="num">3.04</td></tr>
+      <tr><td>v2</td><td>提示词去模板感</td><td class="num">3.67</td><td class="num">4.71</td><td class="num">3.88</td><td class="num">3.96</td></tr>
+      <tr><td>v2</td><td>+ 换成 109 条餐饮参考笔记</td><td class="num">3.58</td><td class="num">4.67</td><td class="num">4.00</td><td class="num">4.00</td></tr>
+      <tr class="best"><td>v3</td><td>结尾带出店名位置、活动规则写全</td><td class="num">3.75</td><td class="num">4.79</td><td class="num">4.17</td><td class="num">4.25</td></tr>
+      <tr><td>v3</td><td>+ 素材追问（模拟店主）</td><td class="num">3.70</td><td class="num">4.35</td><td class="num">3.90</td><td class="num">4.15</td></tr>
+    </table></div>
+    <div class="find"><b>起作用的是提示词</b><span>v1→v2 各维度 +0.4~0.9，是全程最大的提升。</span></div>
+    <div class="find"><b>检索和追问都没测出提升</b><span>换参考库、加追问的差异都在噪声内；通用选题上 12 条假笔记和 91 条真笔记也打平。追问要靠真实店主验证，模拟评测回答不了。</span></div>
+    <div class="find"><b>评测本身也要迭代</b><span>最初的裁判给 80 篇全打 4-5 分，量不出好坏，才换成带分档标准的严格裁判；过程中还修了「第一步」被判违规、「凌晨 2 点」被判编造等误判。</span></div>
+    <p class="note">局限：裁判与生成同为 DeepSeek（自评偏差），每组只跑一次，样本小，±0.2 以内视为噪声。完整数据和发现见 <a href="https://github.com/czczccc/xhs-agent/blob/main/evals/REPORT.md">评测报告</a>。</p>
+  </section>
+
+  <section>
+    <h2>真实试用学到的</h2>
+    <div class="grid">
+      <div class="card"><h3>问题预设会变成「事实」</h3><p>问「有没有一位几乎每周都来的老客」，店主只答了他点什么，文案却写成「几乎每周都来」。数字规则查不出这种语义越界——下一步需要 LLM 审核层或换提问方式。</p></div>
+      <div class="card"><h3>写文案不是护城河</h3><p>店主用通用聊天机器人也能得到差不多的文案；在小红书上图片比文字重要。这是项目停在试用前、没有继续加功能的原因。</p></div>
+    </div>
+  </section>
+
+  <footer>作者 czczccc · 演示中的店铺均为虚构，文案为模型真实生成</footer>
+</div>
+</body>
+</html>
