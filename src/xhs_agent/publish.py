@@ -95,7 +95,15 @@ async def publish_note(settings: Settings, *, title: str, content: str, tags: li
     if getattr(result, "isError", False):
         raise PublishError(text or "xiaohongshu-mcp 返回了错误，但没有说明原因")
     m = _URL_RE.search(text)
-    return PublishResult(message=text or "已发布", post_url=m.group(0) if m else None)
+    if not m:
+        # 没报错不代表真的发出去了——比如小红书弹了验证码，浏览器自动化卡在那一步，
+        # xiaohongshu-mcp 可能仍然不设 isError。没找到笔记链接就不能算成功，把原始返回带出去方便排查，
+        # 并让店主自己去小红书 App 确认这篇到底发没发。
+        raise PublishError(
+            f"xiaohongshu-mcp 没有报错，但返回内容里没有笔记链接，不确定是否真的发布成功——"
+            f"去小红书 App 确认一下这篇在不在，原始返回：{text[:300]!r}"
+        )
+    return PublishResult(message=text or "已发布", post_url=m.group(0))
 
 
 async def check_login_status(settings: Settings) -> LoginStatus:

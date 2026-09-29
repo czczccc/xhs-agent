@@ -83,6 +83,18 @@ async def test_publish_note_tool_error(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_publish_note_no_url_is_not_reported_as_success(monkeypatch):
+    # isError 没设，但也没有笔记链接（例如卡在小红书的验证码这一步）——不能当成功处理，
+    # 之前的版本会把这种情况误报成「发布成功」
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("已提交，等待处理"))
+
+    _patch_call(monkeypatch, fake)
+    with pytest.raises(PublishError, match="没有笔记链接"):
+        await publish_note(_settings(), title="t", content="c", tags=[], images=["http://x/1.png"])
+
+
+@pytest.mark.asyncio
 async def test_publish_note_timeout(monkeypatch):
     s = _settings()
     s.xhs_mcp_timeout = 0.01
