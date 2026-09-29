@@ -8,3 +8,14 @@ services:
     ports: ["5432:5432"]
     volumes:
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+
+  # 一键发布用：浏览器自动化服务，非小红书官方 API（https://github.com/xpzouying/xiaohongshu-mcp）。
+  # 默认不随 `docker compose up` 启动；起前先看 README「发布到小红书」一节，单独扫码登录一次。
+  # 启用：docker compose --profile publish up -d
+  xiaohongshu-mcp:
+    image: xpzouying/xiaohongshu-mcp
+    profiles: ["publish"]
+    ports: ["18060:18060"]
+    volumes:
+      - ./xiaohongshu-mcp-data:/app/data
+      - ./xiaohongshu-mcp-images:/app/images

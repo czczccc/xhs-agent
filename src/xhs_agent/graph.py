@@ -195,6 +195,11 @@ class XhsAgent:
     def get(self, run_id: str) -> AgentState:
         return self.graph.get_state(self._config(run_id)).values
 
+    def mark_published(self, run_id: str, post_url: str | None) -> AgentState:
+        """发布成功后记一下，防止同一篇被重复发布。"""
+        self.graph.update_state(self._config(run_id), {"published": True, "publish_url": post_url or ""})
+        return self.get(run_id)
+
 
 def _last(events: Iterator[tuple[str, object]]) -> AgentState:
     state = None

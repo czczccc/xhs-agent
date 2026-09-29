@@ -153,7 +153,8 @@ def make_nodes(deps: Deps) -> dict:
                 d = _call_json(deps, rec, system, user, Draft)
         except (NodeError, httpx.HTTPError) as e:
             return _fail(e)
-        return {"draft": d, "attempts": state.get("attempts", 0) + 1, "human_decision": None}
+        # 每次重写都是新草稿：清掉发布标记，不然改完了前端还显示「已发布」、也点不了发布按钮
+        return {"draft": d, "attempts": state.get("attempts", 0) + 1, "human_decision": None, "published": False, "publish_url": ""}
 
     def check(state: AgentState) -> dict:
         with deps.tracer.step(state["run_id"], "review") as rec:

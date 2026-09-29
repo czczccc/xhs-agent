@@ -44,6 +44,14 @@ class Settings:
     sample_notes: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "sample_notes.jsonl")
     sensitive_words: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "sensitive_words.txt")
     merchant_words: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "ad_words_food.txt")
+    # 发布到小红书：通过 xiaohongshu-mcp（浏览器自动化，非官方 API）一键发帖；留空 XHS_MCP_URL 就不启用
+    xhs_mcp_url: str = ""  # 例：http://localhost:18060/mcp
+    xhs_mcp_timeout: float = 90.0  # 浏览器自动化比模型调用慢很多，超时给宽一点
+    public_base_url: str = ""  # 供 xiaohongshu-mcp 拉取封面/图片用的对外可访问地址；留空则用请求本身的 host
+
+    @property
+    def publish_enabled(self) -> bool:
+        return bool(self.xhs_mcp_url)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -75,4 +83,7 @@ class Settings:
             s.shops_file = PROJECT_ROOT / env["SHOPS_FILE"]
         if "REQUIRE_SHOP_CODE" in env:
             s.require_shop_code = env["REQUIRE_SHOP_CODE"].strip().lower() in ("1", "true", "yes")
+        s.xhs_mcp_url = env.get("XHS_MCP_URL", s.xhs_mcp_url).strip()
+        s.xhs_mcp_timeout = float(env.get("XHS_MCP_TIMEOUT", s.xhs_mcp_timeout))
+        s.public_base_url = env.get("PUBLIC_BASE_URL", s.public_base_url).strip().rstrip("/")
         return s

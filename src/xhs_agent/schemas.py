@@ -127,3 +127,5 @@ class AgentState(TypedDict, total=False):
     human_feedback: str
     status: str
     error: str
+    published: bool  # 是否已经发布到小红书；防止重复发
+    publish_url: str
