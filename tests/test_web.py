@@ -119,6 +119,16 @@ def test_web_publish_flow(settings, monkeypatch):
     resp = c.post(f"/api/runs/{run_id}/publish", json={"confirm": True})
     assert resp.status_code == 502 and "cookie" in resp.json()["detail"]
 
+    # 登录失效单独用 428：401 在前端会被当成试用码失效
+    from xhs_agent.publish import LoginExpiredError
+
+    async def expired_publish_note(settings, **kwargs):
+        raise LoginExpiredError("小红书登录失效了")
+
+    monkeypatch.setattr(web, "publish_note", expired_publish_note)
+    resp = c.post(f"/api/runs/{run_id}/publish", json={"confirm": True})
+    assert resp.status_code == 428 and "登录失效" in resp.json()["detail"]
+
 
 def test_web_xhs_login_endpoints_disabled_by_default(agent):
     web._agent = agent
@@ -147,7 +157,7 @@ def test_web_xhs_login_flow(settings, monkeypatch):
         return LoginQrCode(image="data:image/png;base64,Zm9v", expires_in=120)
 
     monkeypatch.setattr(web, "get_login_qrcode", fake_qrcode)
-    assert c.post("/api/xhs-login/qrcode").json() == {"image": "data:image/png;base64,Zm9v", "expires_in": 120}
+    assert c.post("/api/xhs-login/qrcode").json() == {"image": "data:image/png;base64,Zm9v", "expires_in": 120, "already_logged_in": False}
 
     async def qrcode_fails(settings):
         raise PublishError("连不上发布服务")

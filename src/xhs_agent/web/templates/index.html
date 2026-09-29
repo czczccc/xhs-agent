@@ -594,8 +594,25 @@ function confirmPublish() {
       render();
     } catch (e) {
       btn.disabled = false; btn.textContent = '确认发布';
+      if (e.status === 428) { bg.remove(); S.xhsLogin = { logged_in: false }; confirmXhsRelogin(e.message); return; }
       toast(e.message || '发布失败，稍后再试');
     }
+  };
+}
+// 发布时发现登录失效（多半是创作者中心会话建不起来）：旧 cookies 已经没用，先退出再扫码
+function confirmXhsRelogin(msg) {
+  const bg = document.createElement('div'); bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet"><h3>小红书登录失效了</h3><p>${esc(msg)}</p>
+    <p>重新扫码登录后再点一次发布就行。扫码后如果手机上要求验证，在小红书 App 里完成验证。</p>
+    <div class="acts" style="margin:12px 0 0"><button class="btn line" id="xhs-re-cancel">稍后</button>
+      <button class="btn" id="xhs-re-go" style="min-height:44px;font-size:15px">重新扫码登录</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  bg.querySelector('#xhs-re-cancel').onclick = () => bg.remove();
+  bg.querySelector('#xhs-re-go').onclick = async () => {
+    const btn = bg.querySelector('#xhs-re-go'); btn.disabled = true; btn.textContent = '准备中…';
+    try { await postJSON('/api/xhs-login/logout', {}); } catch (_) { /* 退出失败也继续尝试扫码 */ }
+    bg.remove(); openXhsLoginSheet();
   };
 }
 
@@ -615,6 +632,7 @@ function openXhsLoginSheet() {
   (async () => {
     try {
       const qr = await postJSON('/api/xhs-login/qrcode', {});
+      if (qr.already_logged_in) { stopAndClose(); toast('小红书账号已经是登录状态'); refreshXhsLogin(); return; }
       bg.querySelector('#xhs-qr').innerHTML = `<img src="${esc(qr.image)}" alt="登录二维码">`;
       bg.querySelector('#xhs-qr-tip').textContent = '打开小红书 App →「我」→ 扫一扫，扫描上面的二维码';
       if (qr.expires_in) expireAt = Date.now() + qr.expires_in * 1000;
