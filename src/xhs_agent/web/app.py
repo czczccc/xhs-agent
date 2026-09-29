@@ -17,7 +17,7 @@ from ..cover import STYLES
 from ..feedback import EventIn
 from ..graph import XhsAgent
 from ..nodes.steps import render_cover_for
-from ..publish import PublishError, publish_note
+from ..publish import PublishError, check_login_status, get_login_qrcode, logout as xhs_logout, publish_note
 from ..schemas import NoteRequest, ShopProfile
 from ..shops import Shop
 from ..tracing import summarize
@@ -165,11 +165,48 @@ def get_config() -> dict:
     return {"publish_enabled": agent().settings.publish_enabled}
 
 
-@app.post("/api/runs/{run_id}/publish")
-async def publish(run_id: str, body: PublishConfirm, request: Request, shop: Shop | None = Depends(current_shop)) -> dict:
+def _publish_settings():
     settings = agent().settings
     if not settings.publish_enabled:
         raise HTTPException(400, "还没配置发布功能")
+    return settings
+
+
+# 登录状态是整个部署实例共用的（xiaohongshu-mcp 自己管 cookies，一个实例对应一个小红书账号），
+# 不按店铺区分；这里只要求带着有效试用码，防止陌生人对着公网地址乱触发登录/退出。
+@app.get("/api/xhs-login/status")
+async def xhs_login_status(shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = _publish_settings()
+    try:
+        status = await check_login_status(settings)
+    except PublishError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"logged_in": status.logged_in, "message": status.message}
+
+
+@app.post("/api/xhs-login/qrcode")
+async def xhs_login_qrcode(shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = _publish_settings()
+    try:
+        qr = await get_login_qrcode(settings)
+    except PublishError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"image": qr.image, "expires_in": qr.expires_in}
+
+
+@app.post("/api/xhs-login/logout")
+async def xhs_login_logout(shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = _publish_settings()
+    try:
+        await xhs_logout(settings)
+    except PublishError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"ok": True}
+
+
+@app.post("/api/runs/{run_id}/publish")
+async def publish(run_id: str, body: PublishConfirm, request: Request, shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = _publish_settings()
     if not body.confirm:
         raise HTTPException(400, "需要先确认才能发布")
     state = _own(run_id, shop)

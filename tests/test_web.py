@@ -118,3 +118,46 @@ def test_web_publish_flow(settings, monkeypatch):
     monkeypatch.setattr(web, "publish_note", failing_publish_note)
     resp = c.post(f"/api/runs/{run_id}/publish", json={"confirm": True})
     assert resp.status_code == 502 and "cookie" in resp.json()["detail"]
+
+
+def test_web_xhs_login_endpoints_disabled_by_default(agent):
+    web._agent = agent
+    c = TestClient(web.app)
+    assert c.get("/api/xhs-login/status").status_code == 400
+    assert c.post("/api/xhs-login/qrcode").status_code == 400
+    assert c.post("/api/xhs-login/logout").status_code == 400
+
+
+def test_web_xhs_login_flow(settings, monkeypatch):
+    from xhs_agent.graph import XhsAgent
+    from xhs_agent.llm import FakeLLM
+    from xhs_agent.publish import LoginQrCode, LoginStatus, PublishError
+
+    settings.xhs_mcp_url = "http://fake-xhs-mcp:18060/mcp"
+    web._agent = XhsAgent(settings=settings, llm=FakeLLM())
+    c = TestClient(web.app)
+
+    async def not_logged_in(settings):
+        return LoginStatus(logged_in=False, message="未登录")
+
+    monkeypatch.setattr(web, "check_login_status", not_logged_in)
+    assert c.get("/api/xhs-login/status").json() == {"logged_in": False, "message": "未登录"}
+
+    async def fake_qrcode(settings):
+        return LoginQrCode(image="data:image/png;base64,Zm9v", expires_in=120)
+
+    monkeypatch.setattr(web, "get_login_qrcode", fake_qrcode)
+    assert c.post("/api/xhs-login/qrcode").json() == {"image": "data:image/png;base64,Zm9v", "expires_in": 120}
+
+    async def qrcode_fails(settings):
+        raise PublishError("连不上发布服务")
+
+    monkeypatch.setattr(web, "get_login_qrcode", qrcode_fails)
+    resp = c.post("/api/xhs-login/qrcode")
+    assert resp.status_code == 502 and "连不上" in resp.json()["detail"]
+
+    async def fake_logout(settings):
+        return None
+
+    monkeypatch.setattr(web, "xhs_logout", fake_logout)
+    assert c.post("/api/xhs-login/logout").json() == {"ok": True}

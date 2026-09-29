@@ -8,7 +8,7 @@
 - **防编造审核**：正文里的价格、折扣、时间、优惠说法必须能在店铺档案 / 需求 / 店主回答里找到；24 个评测用例零编造
 - **可量化的迭代**：24 个餐饮用例 + LLM 严格裁判，提示词迭代让「像店主」从 3.04 → 4.25；并如实测出**检索和追问没有带来提升**
 - **能给真人用的完整链路**：手机端前端、照片封面、SSE 真实进度、试用码（访问 / 档案 / 每日额度 / 店间隔离）、反馈与行为埋点
-- 61 个测试（含 Postgres 集成测试），无 API Key 时用 `FakeLLM` 离线跑通
+- 70 个测试（含 Postgres 集成测试），无 API Key 时用 `FakeLLM` 离线跑通
 
 ## 架构
 
@@ -97,19 +97,25 @@ xhs-db feedback                       # 汇总店主反馈：能直接发比例�
 
 ### 发布到小红书（可选，一键发帖）
 
-结果页可以直接把审核通过的图文发到小红书，不用再手动复制粘贴。**依赖店主自己的小红书账号登录态**，
-通过外部项目 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) 做浏览器自动化发布——**不是小红书官方 API**，
-账号会有被平台限流 / 封禁的风险，且发布后不可撤回，所以这一步永远要店主在结果页手动点「发布到小红书」+「确认发布」才会触发，
+结果页可以直接把审核通过的图文发到小红书，不用再手动复制粘贴；登录也不用离开这个网页——首页有「扫码登录」，
+扫完码状态就存在 xiaohongshu-mcp 那边，之后一直能用到 cookie 过期。
+背后是外部项目 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp) 做浏览器自动化发布——**不是小红书官方 API**，
+账号会有被平台限流 / 封禁的风险，且发布后不可撤回，所以「发布」永远要店主在结果页手动点「发布到小红书」+「确认发布」才会触发，
 生成流程本身不会自动发帖。
 
 ```bash
 pip install -e ".[publish]"
 docker compose --profile publish up -d xiaohongshu-mcp   # 起浏览器自动化服务
-# 首次需要单独扫码登录一次（同一账号同时只能在一处网页端登录），参见 xiaohongshu-mcp 项目文档
 ```
 
-`.env` 里设 `XHS_MCP_URL=http://localhost:18060/mcp` 启用；留空就不启用，结果页也不会出现发布按钮。
+`.env` 里设 `XHS_MCP_URL=http://localhost:18060/mcp` 启用；留空就不启用，首页和结果页都不会出现相关按钮。
 分开部署（例如各自在 Docker 网络里）时还要设 `PUBLIC_BASE_URL`，让 xiaohongshu-mcp 能反过来拉取本服务生成的封面和照片。
+
+**登录态是整个部署实例共用一个小红书账号**（xiaohongshu-mcp 自己管 cookies，MVP 阶段不落数据库、不分店铺账号）：
+- 首页登录条会显示当前状态；未登录点「扫码登录」弹出二维码，用小红书 App 扫码，前端每 2.5 秒轮询一次登录状态，扫完自动关闭
+- 已登录可以点「退出」（对应 xiaohongshu-mcp 的 `delete_cookies`），退出后要重新扫码才能继续发布
+- 同一账号同时只能在一处网页端登录；这个页面本身**不存任何账号密码或 cookie**，登录态只存在 xiaohongshu-mcp 自己的数据目录（`xiaohongshu-mcp-data/`，见 `docker-compose.yml`）
+- 这个设计只适合**单店铺 / 单账号部署**：如果是给多家店铺发试用码的场景（见下面「试用码」），所有店铺会共用同一个小红书账号发布，多账号隔离需要以后再做（每店一个 xiaohongshu-mcp 实例 + 数据库记录哪个店对应哪个登录态）
 
 ### 演示站
 
@@ -137,7 +143,7 @@ src/xhs_agent/
 evals/             选题集、商家用例（含模拟店主 owner_notes）、run_eval.py、REPORT.md
 docs/              GitHub Pages：项目说明、演示、设计稿、试用实施方案
 scripts/           build_demo.py
-tests/             61 个测试
+tests/             70 个测试
 ```
 
 ## 状态与已知问题
