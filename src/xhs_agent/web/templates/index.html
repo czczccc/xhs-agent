@@ -619,6 +619,7 @@ function openXhsLoginSheet() {
   bg.innerHTML = `<div class="sheet"><h3>登录小红书</h3>
     <p id="xhs-lg-tip">输入小红书账号绑定的手机号，我们会让小红书给你发一条验证码。</p>
     <input class="input" id="xhs-phone" type="tel" inputmode="numeric" maxlength="11" placeholder="11 位手机号" autocomplete="tel">
+    <div class="qr-wrap" id="xhs-shot" style="display:none;min-height:0"></div>
     <input class="input" id="xhs-code" type="text" inputmode="numeric" maxlength="8" placeholder="短信验证码" autocomplete="one-time-code" style="display:none;margin-top:8px">
     <div class="acts" style="margin:12px 0 0"><button class="btn line" id="xhs-lg-close">关闭</button>
       <button class="btn" id="xhs-lg-go" style="min-height:44px;font-size:15px">发送验证码</button></div></div>`;
@@ -636,9 +637,14 @@ function openXhsLoginSheet() {
     try {
       if (step === 'phone') {
         go.textContent = '发送中…';
-        await postJSON('/api/xhs-login/phone', { phone: phone.value.trim() });
+        const res = await postJSON('/api/xhs-login/phone', { phone: phone.value.trim() });
         step = 'code'; phone.disabled = true; code.style.display = ''; code.focus();
-        tip.textContent = '验证码已发送，收到短信后填在下面。';
+        tip.textContent = '已经点了「发送验证码」，下面是小红书页面当时的样子。收到短信就填在下面；如果截图里是滑块或其他验证、一直收不到短信，把截图发给我。';
+        if (res.screenshot) {
+          const shot = bg.querySelector('#xhs-shot');
+          shot.innerHTML = `<img src="${esc(res.screenshot)}" alt="小红书登录页截图" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--line)">`;
+          shot.style.display = '';
+        }
         go.textContent = '登录';
       } else {
         go.textContent = '登录中…';

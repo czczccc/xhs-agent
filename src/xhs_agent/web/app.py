@@ -216,20 +216,20 @@ class CodeLogin(BaseModel):
 async def xhs_login_phone(body: PhoneLogin, shop: Shop | None = Depends(current_shop)) -> dict:
     settings = _publish_settings()
     try:
-        message = await send_login_code(settings, body.phone)
+        step = await send_login_code(settings, body.phone)
     except PublishError as e:
         raise HTTPException(502, str(e)) from e
-    return {"ok": True, "message": message}
+    return {"ok": True, "message": step.message, "screenshot": step.screenshot}
 
 
 @app.post("/api/xhs-login/verify")
 async def xhs_login_verify(body: CodeLogin, shop: Shop | None = Depends(current_shop)) -> dict:
     settings = _publish_settings()
     try:
-        message = await verify_login_code(settings, body.code)
+        step = await verify_login_code(settings, body.code)
     except PublishError as e:
         raise HTTPException(502, str(e)) from e
-    return {"ok": True, "message": message}
+    return {"ok": True, "message": step.message, "screenshot": step.screenshot}
 
 
 @app.post("/api/xhs-login/logout")
