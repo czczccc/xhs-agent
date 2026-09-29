@@ -17,7 +17,16 @@ from ..cover import STYLES
 from ..feedback import EventIn
 from ..graph import XhsAgent
 from ..nodes.steps import render_cover_for
-from ..publish import LoginExpiredError, PublishError, check_login_status, get_login_qrcode, logout as xhs_logout, publish_note
+from ..publish import (
+    LoginExpiredError,
+    PublishError,
+    check_login_status,
+    get_login_qrcode,
+    logout as xhs_logout,
+    publish_note,
+    send_login_code,
+    verify_login_code,
+)
 from ..schemas import NoteRequest, ShopProfile
 from ..shops import Shop
 from ..tracing import summarize
@@ -192,6 +201,35 @@ async def xhs_login_qrcode(shop: Shop | None = Depends(current_shop)) -> dict:
     except PublishError as e:
         raise HTTPException(502, str(e)) from e
     return {"image": qr.image, "expires_in": qr.expires_in, "already_logged_in": qr.already_logged_in}
+
+
+class PhoneLogin(BaseModel):
+    phone: str
+
+
+class CodeLogin(BaseModel):
+    code: str
+
+
+# 手机号 + 短信验证码登录创作者中心（发帖就是走创作者中心）。手机号只转给 xiaohongshu-mcp，这边不存、不记日志。
+@app.post("/api/xhs-login/phone")
+async def xhs_login_phone(body: PhoneLogin, shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = _publish_settings()
+    try:
+        message = await send_login_code(settings, body.phone)
+    except PublishError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"ok": True, "message": message}
+
+
+@app.post("/api/xhs-login/verify")
+async def xhs_login_verify(body: CodeLogin, shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = _publish_settings()
+    try:
+        message = await verify_login_code(settings, body.code)
+    except PublishError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"ok": True, "message": message}
 
 
 @app.post("/api/xhs-login/logout")
