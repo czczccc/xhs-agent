@@ -9,11 +9,13 @@ services:
     env_file:
       - .env
     environment:
-      # 和 db 服务同 compose 网络，不再需要 SSH 隧道
+      # 和 db / xiaohongshu-mcp 服务同 compose 网络，不再需要 SSH 隧道
       DATABASE_URL: postgresql://xhs:${POSTGRES_PASSWORD}@db:5432/xhs
       RETRIEVER: ${RETRIEVER:-memory}
       STORAGE: ${STORAGE:-memory}
       REQUIRE_SHOP_CODE: ${REQUIRE_SHOP_CODE:-true}
+      # 发布到小红书：容器间用服务名互访，不用配公网地址；首页扫码登录一次即可
+      XHS_MCP_URL: http://xiaohongshu-mcp:18060/mcp
     ports:
       - "127.0.0.1:8001:8000"
     volumes:
@@ -23,12 +25,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      xiaohongshu-mcp:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # 浏览器自动化服务，非小红书官方 API（https://github.com/xpzouying/xiaohongshu-mcp）。
+  # 登录态存在 xhs_mcp_data 卷里，容器重建也不用重新扫码；不对公网暴露端口，只让 app 通过内网访问。
+  xiaohongshu-mcp:
+    image: xpzouying/xiaohongshu-mcp
+    container_name: xhs-agent-xiaohongshu-mcp
+    restart: unless-stopped
+    volumes:
+      - xhs_mcp_data:/app/data
+      - xhs_mcp_images:/app/images
 
   db:
     image: pgvector/pgvector:pg16
@@ -52,3 +66,5 @@ volumes:
   xhs_outputs:
   xhs_uploads:
   xhs_logs:
+  xhs_mcp_data:
+  xhs_mcp_images:

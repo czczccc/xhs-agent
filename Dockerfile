@@ -18,7 +18,7 @@ COPY src/ ./src/
 COPY data/ ./data/
 # 必须用 editable 安装：config.py 用 __file__ 定位项目根目录（/app），
 # 普通 pip install 会装到 site-packages，导致 data/sample_notes.jsonl 等文件找不到（线上 500 就是这个原因）
-RUN pip install --no-cache-dir -e ".[pg]"
+RUN pip install --no-cache-dir -e ".[pg,publish]"
 
 EXPOSE 8000
 
