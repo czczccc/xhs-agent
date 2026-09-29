@@ -10,7 +10,6 @@ MVP 阶段这边只负责转发「拿二维码 / 查状态 / 退出登录 / 发�
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import json
 import re
 from dataclasses import dataclass
@@ -166,47 +165,6 @@ async def get_login_qrcode(settings: Settings) -> LoginQrCode:
         return LoginQrCode(image=b64, expires_in=expires_in, message=text)
 
     raise PublishError(f"没能从 xiaohongshu-mcp 的返回里解析出二维码图片，原始返回：{text[:300]!r}")
-
-
-_PHONE_RE = re.compile(r"^1\d{10}$")
-_CODE_RE = re.compile(r"^\d{4,8}$")
-# 填完验证码后，分支版会在小红书要求「安全验证扫码」时最多等 120 秒，再加上跳主站同步登录态的 30 秒
-_VERIFY_TIMEOUT = 180.0
-
-
-@dataclass
-class LoginStep:
-    message: str
-    screenshot: str | None = None  # 后台浏览器当时的页面截图（data URL），让店主看到小红书实际显示了什么
-
-
-async def send_login_code(settings: Settings, phone: str) -> LoginStep:
-    """用手机号登录创作者中心的第一步：让 xiaohongshu-mcp-pro 在后台浏览器里填手机号、点「发送验证码」。
-
-    点完之后小红书可能真发了短信，也可能弹滑块/安全验证，工具本身分不出来，所以把页面截图一起带回去。
-    """
-    phone = phone.strip()
-    if not _PHONE_RE.match(phone):
-        raise PublishError("手机号格式不对，要 11 位大陆手机号")
-    result = await _call_tool(settings, "creator_phone_login", {"phone": phone})
-    text = _text_of(result)
-    if _is_error(result):
-        raise PublishError(text or "发送验证码失败")
-    return LoginStep(message=text, screenshot=_image_of(result))
-
-
-async def verify_login_code(settings: Settings, code: str) -> LoginStep:
-    """第二步：把短信验证码填进同一个后台浏览器完成登录，登录态存在 xiaohongshu-mcp 自己的数据卷里。"""
-    code = code.strip()
-    if not _CODE_RE.match(code):
-        raise PublishError("验证码格式不对")
-    if settings.xhs_mcp_timeout < _VERIFY_TIMEOUT:
-        settings = dataclasses.replace(settings, xhs_mcp_timeout=_VERIFY_TIMEOUT)
-    result = await _call_tool(settings, "creator_verify_otp", {"otp": code})
-    text = _text_of(result)
-    if _is_error(result):
-        raise PublishError(text or "验证码登录失败")
-    return LoginStep(message=text, screenshot=_image_of(result))
 
 
 async def logout(settings: Settings) -> None:
