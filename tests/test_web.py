@@ -69,3 +69,52 @@ def test_web_stream_reports_real_progress(agent):
     assert [e["node"] for e in ev2 if e["type"] == "node"][:2] == ["human_gate", "write"]
     assert ev2[-1]["run"]["status"] == "pending_review"
     assert c.post("/api/runs/nope/decision/stream", json={"decision": "approve"}).status_code == 404
+
+
+def test_web_publish_disabled_by_default(agent):
+    web._agent = agent
+    c = TestClient(web.app)
+    r = c.post("/api/runs", json={"topic": "周末杭州一日游"}).json()
+    assert r["publish_enabled"] is False and r["published"] is False
+    assert c.get("/api/config").json()["publish_enabled"] is False
+    assert c.post(f"/api/runs/{r['run_id']}/publish", json={"confirm": True}).status_code == 400
+
+
+def test_web_publish_flow(settings, monkeypatch):
+    from xhs_agent.graph import XhsAgent
+    from xhs_agent.llm import FakeLLM
+    from xhs_agent.publish import PublishError, PublishResult
+
+    settings.xhs_mcp_url = "http://fake-xhs-mcp:18060/mcp"
+    web._agent = XhsAgent(settings=settings, llm=FakeLLM())
+    c = TestClient(web.app)
+    run_id = c.post("/api/runs", json={"topic": "周末杭州一日游"}).json()["run_id"]
+
+    # 没确认就不发
+    assert c.post(f"/api/runs/{run_id}/publish", json={"confirm": False}).status_code == 400
+
+    async def fake_publish_note(settings, *, title, content, tags, images):
+        assert images[0].startswith("http") and "/cover" in images[0]
+        return PublishResult(message="发布成功", post_url="https://www.xiaohongshu.com/explore/abc123")
+
+    monkeypatch.setattr(web, "publish_note", fake_publish_note)
+    res = c.post(f"/api/runs/{run_id}/publish", json={"confirm": True}).json()
+    assert res == {"ok": True, "message": "发布成功", "post_url": "https://www.xiaohongshu.com/explore/abc123"}
+
+    got = c.get(f"/api/runs/{run_id}").json()
+    assert got["published"] is True
+    assert got["publish_url"] == "https://www.xiaohongshu.com/explore/abc123"
+
+    # 已发布过的不能再发
+    assert c.post(f"/api/runs/{run_id}/publish", json={"confirm": True}).status_code == 409
+
+    # 重写之后是新草稿，发布状态要清掉，能再次发布
+    revised = c.post(f"/api/runs/{run_id}/decision", json={"decision": "revise", "feedback": "更活泼"}).json()
+    assert revised["published"] is False and revised["publish_url"] is None
+
+    async def failing_publish_note(settings, **kwargs):
+        raise PublishError("cookie 过期了，去重新登录一下")
+
+    monkeypatch.setattr(web, "publish_note", failing_publish_note)
+    resp = c.post(f"/api/runs/{run_id}/publish", json={"confirm": True})
+    assert resp.status_code == 502 and "cookie" in resp.json()["detail"]

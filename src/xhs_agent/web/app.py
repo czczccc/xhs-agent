@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -17,6 +17,7 @@ from ..cover import STYLES
 from ..feedback import EventIn
 from ..graph import XhsAgent
 from ..nodes.steps import render_cover_for
+from ..publish import PublishError, publish_note
 from ..schemas import NoteRequest, ShopProfile
 from ..shops import Shop
 from ..tracing import summarize
@@ -37,6 +38,10 @@ class Decision(BaseModel):
     feedback: str = ""
 
 
+class PublishConfirm(BaseModel):
+    confirm: bool = False  # 后端也校验一次，不只靠前端弹窗
+
+
 def _view(state: dict) -> dict:
     run_id = state["run_id"]
     return {
@@ -52,6 +57,9 @@ def _view(state: dict) -> dict:
         "cover_style": state["request"].cover_style,
         "photos": [f"/api/uploads/{p}" for p in state["request"].photos],
         "stats": summarize(agent().settings.log_file, run_id),
+        "publish_enabled": agent().settings.publish_enabled,
+        "published": state.get("published", False),
+        "publish_url": state.get("publish_url") or None,
     }
 
 
@@ -146,6 +154,45 @@ def decide(run_id: str, body: Decision, shop: Shop | None = Depends(current_shop
         return _view(agent().resume(run_id, body.decision, body.feedback))
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+# ---------- 发布到小红书：通过外部 xiaohongshu-mcp（浏览器自动化，非官方 API）一键发帖 ----------
+# 不在生成流程里自动触发；必须店主在结果页看过草稿、点了「确认发布」才会调用，且发布后不可撤回。
+
+
+@app.get("/api/config")
+def get_config() -> dict:
+    return {"publish_enabled": agent().settings.publish_enabled}
+
+
+@app.post("/api/runs/{run_id}/publish")
+async def publish(run_id: str, body: PublishConfirm, request: Request, shop: Shop | None = Depends(current_shop)) -> dict:
+    settings = agent().settings
+    if not settings.publish_enabled:
+        raise HTTPException(400, "还没配置发布功能")
+    if not body.confirm:
+        raise HTTPException(400, "需要先确认才能发布")
+    state = _own(run_id, shop)
+    if state.get("published"):
+        raise HTTPException(409, "这篇已经发布过了，不会重复发")
+    if state.get("status") != "pending_review" or not (state.get("review") and state["review"].passed):
+        raise HTTPException(409, "这篇还没通过审核，不能发布")
+    if not state.get("cover_path"):
+        raise HTTPException(409, "还没有封面，不能发布")
+
+    draft, req = state["draft"], state["request"]
+    base = settings.public_base_url or str(request.base_url).rstrip("/")
+    images = [f"{base}/api/runs/{run_id}/cover?style={req.cover_style}"] + [f"{base}/api/uploads/{p}" for p in req.photos]
+
+    try:
+        result = await publish_note(settings, title=draft.title, content=draft.body, tags=draft.tags, images=images)
+    except PublishError as e:
+        agent().tracer.log(run_id=run_id, node="publish", ok=False, error=str(e))
+        raise HTTPException(502, str(e)) from e
+
+    agent().tracer.log(run_id=run_id, node="publish", ok=True, post_url=result.post_url)
+    agent().mark_published(run_id, result.post_url)
+    return {"ok": True, "message": result.message, "post_url": result.post_url}
 
 
 # ---------- 流式版本：每完成一个节点推一条 SSE，前端据此显示真实进度 ----------

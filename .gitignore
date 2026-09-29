@@ -13,3 +13,7 @@ data/xiaohongshu_notes_*.json
 data/canyin_*.json
 # 本地开发配置
 .claude/
+
+# xiaohongshu-mcp 的登录态 / cookies，不能进仓库
+xiaohongshu-mcp-data/
+xiaohongshu-mcp-images/

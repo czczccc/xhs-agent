@@ -103,6 +103,8 @@ details.card[open] summary { margin-bottom: 12px; }
 
 .check { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--ok); background: var(--ok-soft); padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; }
 .check.warn { color: var(--red); background: var(--red-soft); }
+.pub-done { color: var(--ok); background: var(--ok-soft); text-align: center; font-size: 14px; }
+.pub-done a { color: inherit; font-weight: 600; }
 .cover { aspect-ratio: 3 / 4; border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; background: var(--card); position: relative; }
 .cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .cover.loading-img::after { content: "封面生成中…"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--sub); font-size: 14px; background: var(--card); }
@@ -466,10 +468,18 @@ function vResult() {
         <div class="text ${S.expanded ? '' : 'clamp'}" id="text">${esc(d.body)}</div>
         ${S.expanded ? '' : '<button class="more" id="more">展开全文 ⌄</button>'}
         <div class="tags">${esc(tags)}</div></div>
+      ${r.publish_enabled ? vPublish(r, ok) : ''}
       ${vFeedback()}
       <button class="btn ghost" id="again">＋ 再写一篇</button>
     </div>
   </div>`;
+}
+function vPublish(r, ok) {
+  if (r.published) {
+    return `<div class="card pub-done">✓ 已发布到小红书${r.publish_url ? `<br><a href="${esc(r.publish_url)}" target="_blank" rel="noopener">查看笔记 ↗</a>` : ''}</div>`;
+  }
+  if (!ok) return '';
+  return `<button class="btn" id="publish" style="margin:4px 0 12px">🚀 发布到小红书</button>`;
 }
 const RATINGS = [['ready', '👍', '能直接发'], ['edit', '✍️', '改改能发'], ['bad', '👎', '不能用']];
 function vFeedback() {
@@ -546,6 +556,29 @@ function bindResult() {
       if (!v) { bg.querySelector('#fb').focus(); return; }
       bg.remove(); revise(v);
     };
+  };
+  if ($('#publish')) $('#publish').onclick = confirmPublish;
+}
+function confirmPublish() {
+  const bg = document.createElement('div'); bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet"><h3>确认要发布吗？</h3>
+    <p>会直接把这篇发到小红书，发布后不可撤回。发之前再看一眼标题和正文哦。</p>
+    <div class="acts" style="margin:12px 0 0"><button class="btn line" id="pub-cancel">取消</button>
+      <button class="btn" id="pub-go" style="min-height:44px;font-size:15px">确认发布</button></div></div>`;
+  document.body.appendChild(bg);
+  bg.onclick = e => { if (e.target === bg) bg.remove(); };
+  bg.querySelector('#pub-cancel').onclick = () => bg.remove();
+  bg.querySelector('#pub-go').onclick = async () => {
+    const btn = bg.querySelector('#pub-go'); btn.disabled = true; btn.textContent = '发布中…';
+    try {
+      const res = await postJSON(`/api/runs/${S.run.run_id}/publish`, { confirm: true });
+      S.run = { ...S.run, published: true, publish_url: res.post_url || null };
+      bg.remove(); track('publish'); toast('已发布到小红书');
+      render();
+    } catch (e) {
+      btn.disabled = false; btn.textContent = '确认发布';
+      toast(e.message || '发布失败，稍后再试');
+    }
   };
 }
 
