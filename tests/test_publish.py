@@ -11,6 +11,8 @@ from xhs_agent.publish import (
     get_login_qrcode,
     logout,
     publish_note,
+    send_login_code,
+    verify_login_code,
 )
 
 
@@ -258,3 +260,52 @@ async def test_logout_error(monkeypatch):
     _patch_call(monkeypatch, fake)
     with pytest.raises(PublishError, match="删除失败"):
         await logout(_settings())
+
+
+# ---------- 手机号 + 验证码登录（xiaohongshu-mcp-pro） ----------
+
+
+@pytest.mark.asyncio
+async def test_send_login_code(monkeypatch):
+    async def fake(url, tool, arguments):
+        assert tool == "creator_phone_login" and arguments == {"phone": "13800000000"}
+        return FakeResult(FakeTextBlock("验证码已发送，请查看截图后调用 creator_verify_otp 填写验证码"), FakeImageBlock("Zm9v"))
+
+    _patch_call(monkeypatch, fake)
+    assert "验证码已发送" in await send_login_code(_settings(), " 13800000000 ")
+
+
+@pytest.mark.asyncio
+async def test_send_login_code_rejects_bad_phone(monkeypatch):
+    async def fake(url, tool, arguments):
+        raise AssertionError("格式不对不该调用服务")
+
+    _patch_call(monkeypatch, fake)
+    with pytest.raises(PublishError, match="手机号"):
+        await send_login_code(_settings(), "12345")
+
+
+@pytest.mark.asyncio
+async def test_verify_login_code_uses_longer_timeout(monkeypatch):
+    seen = {}
+
+    async def fake_call(settings, tool, arguments=None):
+        seen["timeout"], seen["tool"], seen["args"] = settings.xhs_mcp_timeout, tool, arguments
+        return FakeResult(FakeTextBlock("creator 登录成功，cookies 已保存。"))
+
+    monkeypatch.setattr(publish_mod, "_call_tool", fake_call)
+    s = _settings()
+    s.xhs_mcp_timeout = 30
+    assert "登录成功" in await verify_login_code(s, "123456")
+    assert seen == {"timeout": 180.0, "tool": "creator_verify_otp", "args": {"otp": "123456"}}
+    assert s.xhs_mcp_timeout == 30  # 不改原配置
+
+
+@pytest.mark.asyncio
+async def test_verify_login_code_error(monkeypatch):
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("验证码登录失败: 请先调用 creator_phone_login 发送验证码"), is_error=True)
+
+    _patch_call(monkeypatch, fake)
+    with pytest.raises(PublishError, match="请先调用"):
+        await verify_login_code(_settings(), "123456")

@@ -34,12 +34,21 @@ services:
       retries: 3
       start_period: 60s
 
-  # 浏览器自动化服务，非小红书官方 API（https://github.com/xpzouying/xiaohongshu-mcp）。
-  # 登录态存在 xhs_mcp_data 卷里，容器重建也不用重新扫码；不对公网暴露端口，只让 app 通过内网访问。
+  # 浏览器自动化服务，非小红书官方 API。用的是 xiaohongshu-mcp 的分支版 xiaohongshu-mcp-pro
+  # （https://github.com/GuardSkill/xiaohongshu-mcp-pro），因为原版只支持扫码登录主站，
+  # 发帖用的创作者中心要短信验证码时没地方填；分支版直接用「手机号 + 验证码」登录创作者中心。
+  # 固定到审过代码的这个提交（只访问小红书自己的域名），升级前要重新看一遍改动。
+  # 登录态（Chrome profile + cookies）存在 xhs_mcp_data 卷里，容器重建也不用重新登录；
+  # 不对公网暴露端口，只让 app 通过内网访问。
   xiaohongshu-mcp:
-    image: xpzouying/xiaohongshu-mcp
+    build: https://github.com/GuardSkill/xiaohongshu-mcp-pro.git#6183097a86e7f0c5b2efb9913a76cd54a6cfc958
+    image: xhs-agent-xiaohongshu-mcp-pro:6183097
     container_name: xhs-agent-xiaohongshu-mcp
     restart: unless-stopped
+    init: true
+    environment:
+      COOKIES_PATH: /app/data/cookies.json
+      ACCOUNTS_PATH: /app/data/accounts.json
     volumes:
       - xhs_mcp_data:/app/data
       - xhs_mcp_images:/app/images
