@@ -46,6 +46,11 @@ services:
     container_name: xhs-agent-xiaohongshu-mcp
     restart: unless-stopped
     init: true
+    # Chrome 的 profile 在数据卷里，会留下 SingletonLock（记着「主机名-进程号」）。容器每次重建主机名都会变，
+    # Chrome 就把旧锁当成别的机器还在用，直接拒绝启动（「Failed to create ... SingletonLock: File exists」）。
+    # 固定主机名，并且在服务启动时（此时肯定没有 Chrome 在跑）清掉残留的锁。
+    hostname: xhs-mcp
+    entrypoint: ["sh", "-c", "rm -f /app/data/profile_*/Singleton* && exec ./app"]
     environment:
       COOKIES_PATH: /app/data/cookies.json
       ACCOUNTS_PATH: /app/data/accounts.json
