@@ -1,0 +1,92 @@
+diff --git a/xiaohongshu/creator_login.go b/xiaohongshu/creator_login.go
+index 6d7b8a0..60b2266 100644
+--- a/xiaohongshu/creator_login.go
++++ b/xiaohongshu/creator_login.go
+@@ -59,26 +59,24 @@ func (a *CreatorLoginAction) SendOTP(phone string) ([]byte, error) {
+ 	}
+ 	time.Sleep(1 * time.Second) // 等待 Vue 响应式更新按钮状态
+ 
+-	// 用 JS 匹配直接文本节点为"发送验证码"的元素并点击
+-	// 避免匹配到包含该文字的父容器
+-	clicked, err := a.page.Eval(`() => {
+-		for (const el of document.querySelectorAll('*')) {
+-			const direct = Array.from(el.childNodes)
+-				.filter(n => n.nodeType === 3)
+-				.map(n => n.textContent.trim())
+-				.join('');
+-			if (direct === '发送验证码') {
+-				el.click();
+-				return true;
+-			}
+-		}
+-		return false;
+-	}`)
+-	if err != nil || !clicked.Value.Bool() {
++	// 先勾选「我已阅读并同意」：没勾选时点「发送验证码」只会弹出同意协议的确认框，短信不会发出
++	a.tickAgreement()
++
++	if !a.clickByDirectText("发送验证码", false) {
+ 		shot, _ := pp.Screenshot(false, nil)
+ 		saveDebugShot("creator-login-no-otp-btn", shot)
+ 		return nil, errors.New("未找到发送验证码按钮")
+ 	}
++	time.Sleep(1500 * time.Millisecond)
++
++	// 仍然弹了同意协议的确认框：点「同意」。同意后如果按钮还是「发送验证码」（没进入倒计时），说明短信还没发，再点一次
++	if a.clickByDirectText("同意", true) {
++		logrus.Info("已在确认框中同意用户协议")
++		time.Sleep(1500 * time.Millisecond)
++		if a.clickByDirectText("发送验证码", false) {
++			logrus.Info("同意协议后重新点击发送验证码")
++		}
++	}
+ 	time.Sleep(2 * time.Second)
+ 
+ 	return pp.Screenshot(false, nil)
+@@ -151,6 +149,46 @@ func (a *CreatorLoginAction) VerifyOTP(otp string) ([]byte, error) {
+ 	return nil, errors.New("安全验证超时（120 秒），请重新登录")
+ }
+ 
++// clickByDirectText 点击页面上直接文本等于 text（prefix 为 true 时是以 text 开头）且可见的元素。
++// 只看元素自己的文本节点，避免点到包含这段文字的父容器。
++func (a *CreatorLoginAction) clickByDirectText(text string, prefix bool) bool {
++	res, err := a.page.Eval(fmt.Sprintf(`() => {
++		const want = %q, prefix = %t;
++		for (const el of document.querySelectorAll('*')) {
++			const direct = Array.from(el.childNodes)
++				.filter(n => n.nodeType === 3)
++				.map(n => n.textContent.trim())
++				.join('');
++			if (!(prefix ? direct.startsWith(want) : direct === want)) continue;
++			const r = el.getBoundingClientRect();
++			if (r.width === 0 || r.height === 0) continue;
++			el.click();
++			return true;
++		}
++		return false;
++	}`, text, prefix))
++	return err == nil && res.Value.Bool()
++}
++
++// tickAgreement 勾选登录表单里「我已阅读并同意」的协议复选框（已勾选就不动）
++func (a *CreatorLoginAction) tickAgreement() {
++	res, err := a.page.Eval(`() => {
++		for (const box of document.querySelectorAll('input[type=checkbox]')) {
++			if (box.checked) return 'already';
++			const target = box.closest('label') || box;
++			target.click();
++			if (!box.checked) box.click();
++			return box.checked ? 'ticked' : 'failed';
++		}
++		return 'none';
++	}`)
++	if err != nil {
++		logrus.Warnf("勾选用户协议失败（non-fatal）: %v", err)
++		return
++	}
++	logrus.Infof("用户协议复选框: %s", res.Value.Str())
++}
++
+ // creatorLoginDone 检查 creator 页面是否已离开 /login（登录完成的信号）
+ func (a *CreatorLoginAction) creatorLoginDone() bool {
+ 	info, err := a.page.Info()
