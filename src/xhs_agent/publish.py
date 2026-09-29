@@ -23,6 +23,14 @@ class PublishError(RuntimeError):
     """调用失败：连不上服务、超时，或 xiaohongshu-mcp 自己报错（例如登录态过期）。"""
 
 
+class LoginExpiredError(PublishError):
+    """小红书登录失效（常见：主站登录还在，但发帖用的创作者中心会话建立不起来），需要退出后重新扫码。"""
+
+
+# xiaohongshu-mcp 登录失效时的报错文字，例如「发布失败: 创作者中心登录失效，请重新扫码登录」
+_LOGIN_EXPIRED_HINTS = ("登录失效", "重新扫码", "未登录", "登录已过期", "登录态过期")
+
+
 @dataclass
 class PublishResult:
     message: str
@@ -37,9 +45,10 @@ class LoginStatus:
 
 @dataclass
 class LoginQrCode:
-    image: str  # data URL，前端直接 <img src> 用
+    image: str  # data URL，前端直接 <img src> 用；already_logged_in 时为空
     expires_in: int | None = None
     message: str = ""
+    already_logged_in: bool = False
 
 
 async def _connect_and_call(url: str, tool: str, arguments: dict | None = None) -> object:
@@ -68,6 +77,17 @@ async def _call_tool(settings: Settings, tool: str, arguments: dict | None = Non
         raise PublishError(f"连不上发布服务：{type(e).__name__}: {e}") from e
 
 
+def _is_error(result: object) -> bool:
+    # mcp SDK 2.x 把字段改成了 is_error，1.x 是 isError；只读其中一个会把所有报错都当成成功
+    return bool(getattr(result, "is_error", False) or getattr(result, "isError", False))
+
+
+def _raise_error(text: str, fallback: str) -> None:
+    if any(h in text for h in _LOGIN_EXPIRED_HINTS):
+        raise LoginExpiredError(f"小红书登录失效了，退出后重新扫码登录再发（{text[:200]}）")
+    raise PublishError(text or fallback)
+
+
 def _text_of(result: object) -> str:
     return "\n".join(
         getattr(b, "text", "") for b in getattr(result, "content", []) if getattr(b, "type", None) == "text"
@@ -77,7 +97,7 @@ def _text_of(result: object) -> str:
 def _image_of(result: object) -> str | None:
     for b in getattr(result, "content", []):
         if getattr(b, "type", None) == "image" and getattr(b, "data", None):
-            mime = getattr(b, "mimeType", None) or "image/png"
+            mime = getattr(b, "mime_type", None) or getattr(b, "mimeType", None) or "image/png"
             return f"data:{mime};base64,{b.data}"
     return None
 
@@ -92,18 +112,17 @@ async def publish_note(settings: Settings, *, title: str, content: str, tags: li
 
     result = await _call_tool(settings, "publish_content", arguments)
     text = _text_of(result)
-    if getattr(result, "isError", False):
-        raise PublishError(text or "xiaohongshu-mcp 返回了错误，但没有说明原因")
+    if _is_error(result) or text.startswith("发布失败"):
+        _raise_error(text, "xiaohongshu-mcp 返回了错误，但没有说明原因")
     m = _URL_RE.search(text)
-    if not m:
-        # 没报错不代表真的发出去了——比如小红书弹了验证码，浏览器自动化卡在那一步，
-        # xiaohongshu-mcp 可能仍然不设 isError。没找到笔记链接就不能算成功，把原始返回带出去方便排查，
-        # 并让店主自己去小红书 App 确认这篇到底发没发。
+    # xiaohongshu-mcp 成功时只回「内容发布成功: {...}」，不带笔记链接，所以认这句话；
+    # 既没这句话也没链接的就不能算成功，把原始返回带出去，让店主自己去 App 确认。
+    if not m and "发布成功" not in text:
         raise PublishError(
-            f"xiaohongshu-mcp 没有报错，但返回内容里没有笔记链接，不确定是否真的发布成功——"
-            f"去小红书 App 确认一下这篇在不在，原始返回：{text[:300]!r}"
+            f"xiaohongshu-mcp 没有报错，但也没说发布成功，不确定这篇发出去没有——"
+            f"去小红书 App 确认一下，原始返回：{text[:300]!r}"
         )
-    return PublishResult(message=text or "已发布", post_url=m.group(0))
+    return PublishResult(message=text or "已发布", post_url=m.group(0) if m else None)
 
 
 async def check_login_status(settings: Settings) -> LoginStatus:
@@ -112,11 +131,12 @@ async def check_login_status(settings: Settings) -> LoginStatus:
     """
     result = await _call_tool(settings, "check_login_status")
     text = _text_of(result)
-    if getattr(result, "isError", False):
+    if _is_error(result):
         raise PublishError(text or "查登录状态失败")
     logged_in = _parse_bool_field(text, ("logged_in", "login", "isLoggedIn", "loggedIn"))
     if logged_in is None:
-        logged_in = any(k in text for k in ("已登录", "logged in", "true")) and "未登录" not in text and "not logged" not in text.lower()
+        # xiaohongshu-mcp 实际返回「✅ 已登录\n用户名: xxx」或「❌ 未登录 ...」
+        logged_in = ("已登录" in text or "logged in" in text.lower()) and "未登录" not in text and "not logged" not in text.lower()
     return LoginStatus(logged_in=logged_in, message=text)
 
 
@@ -124,10 +144,12 @@ async def get_login_qrcode(settings: Settings) -> LoginQrCode:
     """要一张登录二维码。优先取 MCP 返回的图片内容块；退化成从文字里解析 base64/超时时间。"""
     result = await _call_tool(settings, "get_login_qrcode")
     text = _text_of(result)
-    if getattr(result, "isError", False):
+    if _is_error(result):
         raise PublishError(text or "获取登录二维码失败")
 
     image = _image_of(result)
+    if not image and "已处于登录状态" in text:
+        return LoginQrCode(image="", message=text, already_logged_in=True)
     expires_in = _parse_int_field(text, ("expires_in", "timeout", "expiresIn"))
     if image:
         return LoginQrCode(image=image, expires_in=expires_in, message=text)
@@ -147,7 +169,7 @@ async def get_login_qrcode(settings: Settings) -> LoginQrCode:
 
 async def logout(settings: Settings) -> None:
     result = await _call_tool(settings, "delete_cookies")
-    if getattr(result, "isError", False):
+    if _is_error(result):
         raise PublishError(_text_of(result) or "退出登录失败")
 
 

@@ -5,6 +5,7 @@ import pytest
 from xhs_agent import publish as publish_mod
 from xhs_agent.config import Settings
 from xhs_agent.publish import (
+    LoginExpiredError,
     PublishError,
     check_login_status,
     get_login_qrcode,
@@ -23,13 +24,14 @@ class FakeImageBlock:
     def __init__(self, data, mime_type="image/png"):
         self.type = "image"
         self.data = data
-        self.mimeType = mime_type
+        self.mime_type = mime_type
 
 
 class FakeResult:
+    # 字段名跟 mcp SDK 2.x 的 CallToolResult 一致（is_error，不是 1.x 的 isError）
     def __init__(self, *blocks, is_error=False):
         self.content = list(blocks)
-        self.isError = is_error
+        self.is_error = is_error
 
 
 def _settings():
@@ -83,14 +85,63 @@ async def test_publish_note_tool_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_publish_note_no_url_is_not_reported_as_success(monkeypatch):
-    # isError 没设，但也没有笔记链接（例如卡在小红书的验证码这一步）——不能当成功处理，
-    # 之前的版本会把这种情况误报成「发布成功」
+async def test_publish_note_success_without_url(monkeypatch):
+    # xiaohongshu-mcp 真实的成功返回：只有一句话 + 结构体，不带笔记链接
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("内容发布成功: &{Title:t Content:c Images:1 Status:发布完成}"))
+
+    _patch_call(monkeypatch, fake)
+    result = await publish_note(_settings(), title="t", content="c", tags=[], images=["http://x/1.png"])
+    assert result.post_url is None and "发布成功" in result.message
+
+
+@pytest.mark.asyncio
+async def test_publish_note_creator_login_expired(monkeypatch):
+    # 截图里的真实返回：创作者中心会话建不起来
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("发布失败: 创作者中心登录失效，请重新扫码登录"), is_error=True)
+
+    _patch_call(monkeypatch, fake)
+    with pytest.raises(LoginExpiredError, match="重新扫码"):
+        await publish_note(_settings(), title="t", content="c", tags=[], images=["http://x/1.png"])
+
+
+@pytest.mark.asyncio
+async def test_publish_note_failure_text_without_error_flag(monkeypatch):
+    # 就算错误标记没传过来，「发布失败」开头也不能当成功或「不确定」
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("发布失败: 标题长度超过限制"))
+
+    _patch_call(monkeypatch, fake)
+    with pytest.raises(PublishError, match="标题长度超过限制") as ei:
+        await publish_note(_settings(), title="t", content="c", tags=[], images=["http://x/1.png"])
+    assert not isinstance(ei.value, LoginExpiredError)
+
+
+@pytest.mark.asyncio
+async def test_publish_note_unclear_result_is_not_reported_as_success(monkeypatch):
+    # 没报错，但既没说发布成功也没链接——不能当成功处理
     async def fake(url, tool, arguments):
         return FakeResult(FakeTextBlock("已提交，等待处理"))
 
     _patch_call(monkeypatch, fake)
-    with pytest.raises(PublishError, match="没有笔记链接"):
+    with pytest.raises(PublishError, match="不确定"):
+        await publish_note(_settings(), title="t", content="c", tags=[], images=["http://x/1.png"])
+
+
+@pytest.mark.asyncio
+async def test_publish_note_reads_legacy_isError(monkeypatch):
+    # mcp SDK 1.x 的字段名
+    class Legacy:
+        def __init__(self):
+            self.content = [FakeTextBlock("发布失败: 连接中断")]
+            self.isError = True
+
+    async def fake(url, tool, arguments):
+        return Legacy()
+
+    _patch_call(monkeypatch, fake)
+    with pytest.raises(PublishError, match="连接中断"):
         await publish_note(_settings(), title="t", content="c", tags=[], images=["http://x/1.png"])
 
 
@@ -129,6 +180,31 @@ async def test_check_login_status_plain_text_fallback(monkeypatch):
     _patch_call(monkeypatch, fake)
     status = await check_login_status(_settings())
     assert status.logged_in is False
+
+
+@pytest.mark.asyncio
+async def test_check_login_status_real_format(monkeypatch):
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("✅ 已登录\n用户名: 巷口小馆\n\n你可以使用其他功能了。"))
+
+    _patch_call(monkeypatch, fake)
+    assert (await check_login_status(_settings())).logged_in is True
+
+    async def fake_out(url, tool, arguments):
+        return FakeResult(FakeTextBlock("❌ 未登录\n\n请使用 get_login_qrcode 工具获取二维码进行登录。"))
+
+    _patch_call(monkeypatch, fake_out)
+    assert (await check_login_status(_settings())).logged_in is False
+
+
+@pytest.mark.asyncio
+async def test_get_login_qrcode_already_logged_in(monkeypatch):
+    async def fake(url, tool, arguments):
+        return FakeResult(FakeTextBlock("你当前已处于登录状态"))
+
+    _patch_call(monkeypatch, fake)
+    qr = await get_login_qrcode(_settings())
+    assert qr.already_logged_in is True and qr.image == ""
 
 
 @pytest.mark.asyncio

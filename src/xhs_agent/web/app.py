@@ -17,7 +17,7 @@ from ..cover import STYLES
 from ..feedback import EventIn
 from ..graph import XhsAgent
 from ..nodes.steps import render_cover_for
-from ..publish import PublishError, check_login_status, get_login_qrcode, logout as xhs_logout, publish_note
+from ..publish import LoginExpiredError, PublishError, check_login_status, get_login_qrcode, logout as xhs_logout, publish_note
 from ..schemas import NoteRequest, ShopProfile
 from ..shops import Shop
 from ..tracing import summarize
@@ -191,7 +191,7 @@ async def xhs_login_qrcode(shop: Shop | None = Depends(current_shop)) -> dict:
         qr = await get_login_qrcode(settings)
     except PublishError as e:
         raise HTTPException(502, str(e)) from e
-    return {"image": qr.image, "expires_in": qr.expires_in}
+    return {"image": qr.image, "expires_in": qr.expires_in, "already_logged_in": qr.already_logged_in}
 
 
 @app.post("/api/xhs-login/logout")
@@ -223,6 +223,10 @@ async def publish(run_id: str, body: PublishConfirm, request: Request, shop: Sho
 
     try:
         result = await publish_note(settings, title=draft.title, content=draft.body, tags=draft.tags, images=images)
+    except LoginExpiredError as e:
+        # 428 而不是 401：前端把 401 当成试用码失效，会把店主踢回输码页
+        agent().tracer.log(run_id=run_id, node="publish", ok=False, error=str(e))
+        raise HTTPException(428, str(e)) from e
     except PublishError as e:
         agent().tracer.log(run_id=run_id, node="publish", ok=False, error=str(e))
         raise HTTPException(502, str(e)) from e
