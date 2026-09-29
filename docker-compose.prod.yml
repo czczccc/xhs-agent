@@ -1,0 +1,54 @@
+# xhs-agent 生产 compose（东京15刀 VPS，域名 xhs.czczccc.space）
+# 首次部署后手动跑一次：docker compose -f docker-compose.prod.yml exec app xhs-db init
+services:
+  app:
+    build: .
+    image: xhs-agent:latest
+    container_name: xhs-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 和 db 服务同 compose 网络，不再需要 SSH 隧道
+      DATABASE_URL: postgresql://xhs:${POSTGRES_PASSWORD}@db:5432/xhs
+      RETRIEVER: ${RETRIEVER:-memory}
+      STORAGE: ${STORAGE:-memory}
+      REQUIRE_SHOP_CODE: ${REQUIRE_SHOP_CODE:-true}
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - xhs_outputs:/app/outputs
+      - xhs_uploads:/app/uploads
+      - xhs_logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: xhs-agent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: xhs
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: xhs
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xhs -d xhs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  xhs_outputs:
+  xhs_uploads:
+  xhs_logs:

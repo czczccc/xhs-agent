@@ -1,0 +1,21 @@
+name: Deploy to Tokyo VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 207.148.92.152
+          username: root
+          key: ${{ secrets.XHS_VPS_SSH_KEY }}
+          command_timeout: 30m
+          script: |
+            cd /opt/xhs-agent
+            git pull origin main
+            docker compose -f docker-compose.prod.yml up -d --build
