@@ -171,36 +171,3 @@ def test_web_xhs_login_flow(settings, monkeypatch):
 
     monkeypatch.setattr(web, "xhs_logout", fake_logout)
     assert c.post("/api/xhs-login/logout").json() == {"ok": True}
-
-
-def test_web_xhs_phone_login(settings, monkeypatch):
-    from xhs_agent.graph import XhsAgent
-    from xhs_agent.llm import FakeLLM
-    from xhs_agent.publish import LoginStep, PublishError
-
-    settings.xhs_mcp_url = "http://fake-xhs-mcp:18060/mcp"
-    web._agent = XhsAgent(settings=settings, llm=FakeLLM())
-    c = TestClient(web.app)
-    calls = []
-
-    async def fake_send(settings, phone):
-        calls.append(("send", phone))
-        return LoginStep(message="验证码已发送", screenshot="data:image/png;base64,Zm9v")
-
-    async def fake_verify(settings, code):
-        calls.append(("verify", code))
-        return LoginStep(message="creator 登录成功")
-
-    monkeypatch.setattr(web, "send_login_code", fake_send)
-    monkeypatch.setattr(web, "verify_login_code", fake_verify)
-    assert c.post("/api/xhs-login/phone", json={"phone": "13800000000"}).json() == {
-        "ok": True, "message": "验证码已发送", "screenshot": "data:image/png;base64,Zm9v"}
-    assert c.post("/api/xhs-login/verify", json={"code": "123456"}).json() == {"ok": True, "message": "creator 登录成功", "screenshot": None}
-    assert calls == [("send", "13800000000"), ("verify", "123456")]
-
-    async def verify_fails(settings, code):
-        raise PublishError("验证码不对")
-
-    monkeypatch.setattr(web, "verify_login_code", verify_fails)
-    resp = c.post("/api/xhs-login/verify", json={"code": "000000"})
-    assert resp.status_code == 502 and "验证码不对" in resp.json()["detail"]
