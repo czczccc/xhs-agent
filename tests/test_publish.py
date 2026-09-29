@@ -272,7 +272,8 @@ async def test_send_login_code(monkeypatch):
         return FakeResult(FakeTextBlock("验证码已发送，请查看截图后调用 creator_verify_otp 填写验证码"), FakeImageBlock("Zm9v"))
 
     _patch_call(monkeypatch, fake)
-    assert "验证码已发送" in await send_login_code(_settings(), " 13800000000 ")
+    step = await send_login_code(_settings(), " 13800000000 ")
+    assert "验证码已发送" in step.message and step.screenshot == "data:image/png;base64,Zm9v"
 
 
 @pytest.mark.asyncio
@@ -296,7 +297,7 @@ async def test_verify_login_code_uses_longer_timeout(monkeypatch):
     monkeypatch.setattr(publish_mod, "_call_tool", fake_call)
     s = _settings()
     s.xhs_mcp_timeout = 30
-    assert "登录成功" in await verify_login_code(s, "123456")
+    assert "登录成功" in (await verify_login_code(s, "123456")).message
     assert seen == {"timeout": 180.0, "tool": "creator_verify_otp", "args": {"otp": "123456"}}
     assert s.xhs_mcp_timeout == 30  # 不改原配置
 

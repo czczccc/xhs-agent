@@ -174,8 +174,17 @@ _CODE_RE = re.compile(r"^\d{4,8}$")
 _VERIFY_TIMEOUT = 180.0
 
 
-async def send_login_code(settings: Settings, phone: str) -> str:
-    """用手机号登录创作者中心的第一步：让 xiaohongshu-mcp-pro 在后台浏览器里填手机号、点「发送验证码」。"""
+@dataclass
+class LoginStep:
+    message: str
+    screenshot: str | None = None  # 后台浏览器当时的页面截图（data URL），让店主看到小红书实际显示了什么
+
+
+async def send_login_code(settings: Settings, phone: str) -> LoginStep:
+    """用手机号登录创作者中心的第一步：让 xiaohongshu-mcp-pro 在后台浏览器里填手机号、点「发送验证码」。
+
+    点完之后小红书可能真发了短信，也可能弹滑块/安全验证，工具本身分不出来，所以把页面截图一起带回去。
+    """
     phone = phone.strip()
     if not _PHONE_RE.match(phone):
         raise PublishError("手机号格式不对，要 11 位大陆手机号")
@@ -183,10 +192,10 @@ async def send_login_code(settings: Settings, phone: str) -> str:
     text = _text_of(result)
     if _is_error(result):
         raise PublishError(text or "发送验证码失败")
-    return text
+    return LoginStep(message=text, screenshot=_image_of(result))
 
 
-async def verify_login_code(settings: Settings, code: str) -> str:
+async def verify_login_code(settings: Settings, code: str) -> LoginStep:
     """第二步：把短信验证码填进同一个后台浏览器完成登录，登录态存在 xiaohongshu-mcp 自己的数据卷里。"""
     code = code.strip()
     if not _CODE_RE.match(code):
@@ -197,7 +206,7 @@ async def verify_login_code(settings: Settings, code: str) -> str:
     text = _text_of(result)
     if _is_error(result):
         raise PublishError(text or "验证码登录失败")
-    return text
+    return LoginStep(message=text, screenshot=_image_of(result))
 
 
 async def logout(settings: Settings) -> None:
