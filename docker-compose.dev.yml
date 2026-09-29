@@ -1,0 +1,18 @@
+# 联想本本地 dev overlay（prod 文件不动）
+# 启动：docker compose -f docker-compose.prod.yml -f docker-compose.dev.yml up -d --build
+services:
+  app:
+    # prod 已占 127.0.0.1:8001；dev 另绑 Tailscale IP 同一端口，Windows/手机经 Tailscale 访问
+    # 本机 IP 变化时改这里
+    ports:
+      - "100.78.21.94:8001:8000"
+    environment:
+      RETRIEVER: memory
+      STORAGE: memory
+      # dev 免试用码，方便直接测流程；prod 保持 true
+      REQUIRE_SHOP_CODE: "false"
+
+  db:
+    environment:
+      # dev 本地 pg 密码（STORAGE=memory 时 app 不连 pg；切 pgvector 模式联调时用）
+      POSTGRES_PASSWORD: xhs
